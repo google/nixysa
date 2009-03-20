@@ -68,7 +68,8 @@ import syntax_tree
 
 _cpp_includes = [('plugin_main.h', False)]
 
-_header_includes = [('string', True),
+_header_includes = [('string.h', True),
+                    ('string', True),
                     ('npapi.h', True),
                     ('npruntime.h', True),
                     ('common.h', False),
@@ -121,17 +122,17 @@ bool StaticInvoke(glue::globals::NPAPIObject *object,
                   const NPVariant *args,
                   uint32_t argCount,
                   NPVariant *result,
-                  char **error_handle);
+                  const char **error_handle);
 bool StaticGetProperty(glue::globals::NPAPIObject *object,
                        NPP npp,
                        NPIdentifier name,
                        NPVariant *variant,
-                       char **error_handle);
+                       const char **error_handle);
 bool StaticSetProperty(glue::globals::NPAPIObject *object,
                        NPP npp,
                        NPIdentifier name,
                        const NPVariant *variant,
-                       char **error_handle);
+                       const char **error_handle);
 """
 
 _class_glue_header_member = """
@@ -142,17 +143,17 @@ bool Invoke(${ClassMutableParamType} object,
             const NPVariant *args,
             uint32_t argCount,
             NPVariant *result,
-            char **error_handle);
+            const char **error_handle);
 bool GetProperty(${ClassParamType} object,
                  NPP npp,
                  NPIdentifier name,
                  NPVariant *variant,
-                 char **error_handle);
+                 const char **error_handle);
 bool SetProperty(${ClassMutableParamType} object,
                  NPP npp,
                  NPIdentifier name,
                  const NPVariant *variant,
-                 char **error_handle);
+                 const char **error_handle);
 bool EnumeratePropertyEntries(NPObject *header,
                               NPIdentifier **value,
                               uint32_t *count);
@@ -273,8 +274,8 @@ bool StaticInvokeDefault(NPObject *header,
                          const NPVariant *args,
                          uint32_t argCount,
                          NPVariant *result) {
-  char *error=NULL;
-  char **error_handle = &error;
+  const char *error=NULL;
+  const char **error_handle = &error;
   bool success = true;
   glue::globals::NPAPIObject *object =
       static_cast<glue::globals::NPAPIObject *>(header);
@@ -298,7 +299,7 @@ static bool StaticInvokeEntry(NPObject *header,
   // http://code.google.com/p/chromium/issues/detail?id=5110
   if (name == NULL)
     return StaticInvokeDefault(header, args, argCount, result);
-  char *error=NULL;
+  const char *error=NULL;
   DebugScopedId id(name);  // debug helper
   glue::globals::NPAPIObject *object =
       static_cast<glue::globals::NPAPIObject *>(header);
@@ -318,7 +319,7 @@ static bool StaticInvokeEntry(NPObject *header,
 static bool StaticGetPropertyEntry(NPObject *header,
                                    NPIdentifier name,
                                    NPVariant *variant) {
-  char *error=NULL;
+  const char *error=NULL;
   DebugScopedId id(name);  // debug helper
   glue::globals::NPAPIObject *object =
       static_cast<glue::globals::NPAPIObject *>(header);
@@ -337,7 +338,7 @@ static bool StaticGetPropertyEntry(NPObject *header,
 static bool StaticSetPropertyEntry(NPObject *header,
                                    NPIdentifier name,
                                    const NPVariant *variant) {
-  char *error=NULL;
+  const char *error=NULL;
   DebugScopedId id(name);  // debug helper
   glue::globals::NPAPIObject *object =
       static_cast<glue::globals::NPAPIObject *>(header);
@@ -452,8 +453,8 @@ static bool InvokeEntry(NPObject *header,
                         const NPVariant *args,
                         uint32_t argCount,
                         NPVariant *result) {
-  char *error=NULL;
-  char **error_handle = &error;
+  const char *error=NULL;
+  const char **error_handle = &error;
   DebugScopedId id(name);  // debug helper
   bool success = true;
   ${DispatchFunctionHeader}
@@ -473,8 +474,8 @@ static bool InvokeEntry(NPObject *header,
 static bool GetPropertyEntry(NPObject *header,
                              NPIdentifier name,
                              NPVariant *variant) {
-  char *error=NULL;
-  char **error_handle = &error;
+  const char *error=NULL;
+  const char **error_handle = &error;
   DebugScopedId id(name);  // debug helper
   bool success = true;
   ${DispatchFunctionHeader}
@@ -494,8 +495,8 @@ static bool GetPropertyEntry(NPObject *header,
 static bool SetPropertyEntry(NPObject *header,
                              NPIdentifier name,
                              const NPVariant *variant) {
-  char *error=NULL;
-  char **error_handle = &error;
+  const char *error=NULL;
+  const char **error_handle = &error;
   DebugScopedId id(name);  // debug helper
   bool success = true;
   ${DispatchFunctionHeader}
@@ -522,7 +523,7 @@ bool Invoke(${ClassMutableParamType} object,
             const NPVariant *args,
             uint32_t argCount,
             NPVariant *result,
-            char **error_handle) {
+            const char **error_handle) {
   DebugScopedId id(name);  // debug helper
   GLUE_SCOPED_PROFILE(npp, std::string("${Class}::Invoke(") + (id.text() ?
       id.text() : "") + ")", prof);
@@ -536,7 +537,7 @@ bool GetProperty(${ClassParamType} object,
                  NPP npp,
                  NPIdentifier name,
                  NPVariant *variant,
-                 char **error_handle) {
+                 const char **error_handle) {
   DebugScopedId id(name);  // debug helper
   GLUE_SCOPED_PROFILE(npp, std::string("${Class}::GetProperty(") + (id.text() ?
       id.text() : "") + ")", prof);
@@ -549,7 +550,7 @@ bool SetProperty(${ClassMutableParamType} object,
                  NPP npp,
                  NPIdentifier name,
                  const NPVariant *variant,
-                 char **error_handle) {
+                 const char **error_handle) {
   DebugScopedId id(name);  // debug helper
   GLUE_SCOPED_PROFILE(npp, std::string("${Class}::SetProperty(") + (id.text() ?
       id.text() : "") + ")", prof);
@@ -588,7 +589,7 @@ bool StaticInvoke(glue::globals::NPAPIObject *object,
                   const NPVariant *args,
                   uint32_t argCount,
                   NPVariant *result,
-                  char **error_handle) {
+                  const char **error_handle) {
   GLUE_SCOPED_PROFILE(npp, "${Class}::StaticInvoke", prof);
   bool success = true;
   ${#StaticInvokeCode}
@@ -600,7 +601,7 @@ bool StaticGetProperty(glue::globals::NPAPIObject *object,
                        NPP npp,
                        NPIdentifier name,
                        NPVariant *variant,
-                       char **error_handle) {
+                       const char **error_handle) {
   GLUE_SCOPED_PROFILE(npp, "${Class}::StaticGetProperty", prof);
   bool success = true;
   ${#StaticGetPropertyCode}
@@ -613,7 +614,7 @@ bool StaticSetProperty(glue::globals::NPAPIObject *object,
                        NPP npp,
                        NPIdentifier name,
                        const NPVariant *variant,
-                       char **error_handle) {
+                       const char **error_handle) {
   GLUE_SCOPED_PROFILE(npp, "${Class}::StaticSetProperty", prof);
   bool success = true;
   ${#StaticSetPropertyCode}
@@ -658,7 +659,7 @@ bool Invoke(${ClassMutableParamType} object,
             const NPVariant *args,
             uint32_t argCount,
             NPVariant *result,
-            char **error_handle) {
+            const char **error_handle) {
   DebugScopedId id(name);  // debug helper
   GLUE_SCOPED_PROFILE(npp, std::string("${Class}::Invoke(") + (id.text() ?
       id.text() : "") + ")", prof);
@@ -675,7 +676,7 @@ bool GetProperty(${ClassParamType} object,
                  NPP npp,
                  NPIdentifier name,
                  NPVariant *variant,
-                 char **error_handle) {
+                 const char **error_handle) {
   DebugScopedId id(name);  // debug helper
   GLUE_SCOPED_PROFILE(npp, std::string("${Class}::GetProperty(") + (id.text() ?
       id.text() : "") + ")", prof);
@@ -690,7 +691,7 @@ bool SetProperty(${ClassMutableParamType} object,
                  NPP npp,
                  NPIdentifier name,
                  const NPVariant *variant,
-                 char **error_handle) {
+                 const char **error_handle) {
   DebugScopedId id(name);  // debug helper
   GLUE_SCOPED_PROFILE(npp, std::string("${Class}::SetProperty(") + (id.text() ?
       id.text() : "") + ")", prof);
@@ -731,7 +732,7 @@ bool StaticInvoke(glue::globals::NPAPIObject *object,
                   const NPVariant *args,
                   uint32_t argCount,
                   NPVariant *result,
-                  char **error_handle) {
+                  const char **error_handle) {
   GLUE_SCOPED_PROFILE(npp, "${Class}::StaticInvoke", prof);
   bool success = true;
   ${#StaticInvokeCode}
@@ -742,7 +743,7 @@ bool StaticGetProperty(glue::globals::NPAPIObject *object,
                        NPP npp,
                        NPIdentifier name,
                        NPVariant *variant,
-                       char **error_handle) {
+                       const char **error_handle) {
   GLUE_SCOPED_PROFILE(npp, "${Class}::StaticGetProperty", prof);
   bool success = true;
   ${#StaticGetPropertyCode}
@@ -754,7 +755,7 @@ bool StaticSetProperty(glue::globals::NPAPIObject *object,
                        NPP npp,
                        NPIdentifier name,
                        const NPVariant *variant,
-                       char **error_handle) {
+                       const char **error_handle) {
   GLUE_SCOPED_PROFILE(npp, "${Class}::StaticSetProperty", prof);
   bool success = true;
   ${#StaticSetPropertyCode}
@@ -813,8 +814,8 @@ _namespace_glue_cpp_template = string.Template(''.join([
 _callback_glue_cpp_template = string.Template("""
 ${RunCallback} {
 ${StartException}
-  char *error=NULL;
-  char **error_handle = &error;
+  const char *error=NULL;
+  const char **error_handle = &error;
   bool success = true;
   NPVariant args[${ArgCount}];
   NPVariant result;
@@ -847,8 +848,8 @@ ${EndException}
 _callback_no_param_glue_cpp_template = string.Template("""
 ${RunCallback} {
 ${StartException}
-  char *error=NULL;
-  char **error_handle = &error;
+  const char *error=NULL;
+  const char **error_handle = &error;
   bool success = true;
   NPVariant result;
   NULL_TO_NPVARIANT(result);

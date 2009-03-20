@@ -16,6 +16,7 @@
 // class or namespace, as described in npapi_generator.py. It simply associates
 // NPObjects to identifiers.
 
+#include <string.h>
 #include "static_object.h"
 
 namespace glue {

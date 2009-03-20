@@ -20,6 +20,7 @@
 
 #include <npupp.h>
 #include <stdlib.h>
+#include <string.h>
 #include <algorithm>
 
 static NPNetscapeFuncs g_browser_functions;

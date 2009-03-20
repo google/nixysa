@@ -15,17 +15,17 @@
 #include <npapi.h>
 
 extern "C" {
-  char *NP_GetMIMEDescription(void) {
+  const char *NP_GetMIMEDescription(void) {
     return "application/complex::Complex Sample MIME";
   }
 
   NPError NP_GetValue(NPP instance, NPPVariable variable, void *value) {
     switch (variable) {
       case NPPVpluginNameString:
-        *static_cast<char **>(value) = "Complex Sample";
+        *static_cast<const char **>(value) = "Complex Sample";
         break;
       case NPPVpluginDescriptionString:
-        *static_cast<char **>(value) = "Complex Desc";
+        *static_cast<const char **>(value) = "Complex Desc";
         break;
       default:
         return NPERR_INVALID_PARAM;

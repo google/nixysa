@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <assert.h>
+#include <string.h>
 
 #ifdef OS_WINDOWS
 #include <windows.h>

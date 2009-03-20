@@ -1,0 +1,10 @@
+This sample is a simple example for the code generator.
+
+To build, just use 'scons' with the provided SConstruct. Install the built
+plugin into the plugins directory for your favorite browser. Then open
+test.html.
+
+For details look into:
+complex.h, that defines a simple C++ class for complex numbers.
+complex.idl, that defines the API that is exposed to Javascript.
+test.html, that shows an example usage of the generated plug-in.

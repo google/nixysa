@@ -1,0 +1,12 @@
+[binding_model=by_value, include="complex.h"] class Complex {
+  Complex(float real, float imaginary);
+
+  [getter, setter] float real;
+  [getter, setter] float imaginary;
+
+  float norm2();
+  float norm();
+
+  Complex add(Complex other);
+  Complex mul(Complex other);
+};

@@ -12,21 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <stdio.h>
-#include <npupp.h>
-#include <string>
+// This file provides a stub implementation of most plug-in entrypoints.
+
+#include <npapi.h>
+#include "npn_api.h"
 #include "globals_glue.h"
 
+namespace glue {
+namespace globals {
+
+void SetLastError(NPP npp, const char *error) {
+}
+
+}
+}
+
 extern "C" {
-  NPError WINAPI NP_Initialize(NPNetscapeFuncs *browserFuncs);
-  NPError WINAPI NP_GetEntryPoints(NPPluginFuncs *pluginFuncs);
-  void WINAPI NP_Shutdown(void);
-
-  NPError WINAPI NP_Initialize(NPNetscapeFuncs *browserFuncs) {
-    return InitializeNPNApi(browserFuncs);
-  }
-
-  NPError WINAPI NP_GetEntryPoints(NPPluginFuncs *pluginFuncs) {
+  NPError OSCALL NP_GetEntryPoints(NPPluginFuncs *pluginFuncs) {
     pluginFuncs->version = 11;
     pluginFuncs->size = sizeof(pluginFuncs);
     pluginFuncs->newp = NPP_New;
@@ -36,7 +38,7 @@ extern "C" {
     pluginFuncs->destroystream = NPP_DestroyStream;
     pluginFuncs->asfile = NPP_StreamAsFile;
     pluginFuncs->writeready = NPP_WriteReady;
-    pluginFuncs->write = (NPP_WriteProcPtr)NPP_Write;
+    pluginFuncs->write = NPP_Write;
     pluginFuncs->print = NPP_Print;
     pluginFuncs->event = NPP_HandleEvent;
     pluginFuncs->urlnotify = NPP_URLNotify;
@@ -46,32 +48,70 @@ extern "C" {
     return NPERR_NO_ERROR;
   }
 
-  void WINAPI NP_Shutdown(void) {
+  NPError OSCALL NP_Initialize(NPNetscapeFuncs *browserFuncs,
+                               NPPluginFuncs *pluginFuncs) {
+    NPError retval = InitializeNPNApi(browserFuncs);
+    if (retval != NPERR_NO_ERROR) return retval;
+    NP_GetEntryPoints(pluginFuncs);
+    return NPERR_NO_ERROR;
   }
 
-  NPError NPP_New(NPMIMEType pluginType, NPP instance, uint16 mode, int16 argc,
-                  char *argn[], char *argv[], NPSavedData *saved) {
+  NPError OSCALL NP_Shutdown(void) {
+    return NPERR_NO_ERROR;
+  }
+
+  NPError NPP_New(NPMIMEType pluginType, NPP instance, uint16_t mode,
+                  int16_t argc, char *argn[], char *argv[],
+                  NPSavedData *saved) {
     glue::InitializeGlue(instance);
-    instance->pdata = glue::CreateStaticNPObject(instance, NULL);
+    NPObject *object = glue::CreateStaticNPObject(instance, NULL);
+    instance->pdata = object;
     return NPERR_NO_ERROR;
   }
 
   NPError NPP_Destroy(NPP instance, NPSavedData **save) {
-    NPObject *obj = static_cast<NPObject*>(instance->pdata);
-    if (obj) {
-      NPN_ReleaseObject(obj);
+    NPObject *object = static_cast<NPObject*>(instance->pdata);
+    if (object) {
+      NPN_ReleaseObject(object);
       instance->pdata = NULL;
     }
-
     return NPERR_NO_ERROR;
   }
+
+  NPError NPP_GetValue(NPP instance, NPPVariable variable, void *value) {
+    switch (variable) {
+      case NPPVpluginScriptableNPObject: {
+        void **v = static_cast<void **>(value);
+        NPObject *obj = static_cast<NPObject *>(instance->pdata);
+        NPN_RetainObject(obj);
+        *v = obj;
+        break;
+      }
+      default:
+        return NPERR_INVALID_PARAM;
+        break;
+    }
+    return NPERR_NO_ERROR;
+  }
+
+  NPError NPP_SetValue(NPP instance, NPNVariable variable, void *value) {
+    return NPERR_GENERIC_ERROR;
+  }
+
 
   NPError NPP_SetWindow(NPP instance, NPWindow *window) {
     return NPERR_NO_ERROR;
   }
 
+  void NPP_StreamAsFile(NPP instance, NPStream *stream, const char *fname) {
+  }
+
+  int16_t NPP_HandleEvent(NPP instance, void *event) {
+    return 0;
+  }
+
   NPError NPP_NewStream(NPP instance, NPMIMEType type, NPStream *stream,
-                        NPBool seekable, uint16 *stype) {
+                        NPBool seekable, uint16_t *stype) {
     return NPERR_NO_ERROR;
   }
 
@@ -79,45 +119,19 @@ extern "C" {
     return NPERR_NO_ERROR;
   }
 
-  int32 NPP_WriteReady(NPP instance, NPStream *stream) {
-    return 4096;
+  int32_t NPP_WriteReady(NPP instance, NPStream *stream) {
+    return 0;
   }
 
-  int32 NPP_Write(NPP instance, NPStream *stream, int32 offset, int32 len,
-                  void *buffer) {
-    return len;
-  }
-
-  void NPP_StreamAsFile(NPP instance, NPStream *stream, const char *fname) {
+  int32_t NPP_Write(NPP instance, NPStream *stream, int32_t offset, int32_t len,
+                    void *buffer) {
+    return 0;
   }
 
   void NPP_Print(NPP instance, NPPrint *platformPrint) {
   }
 
-  int16 NPP_HandleEvent(NPP instance, void *event) {
-    return 0;
-  }
-
   void NPP_URLNotify(NPP instance, const char *url, NPReason reason,
                      void *notifyData) {
-  }
-
-  NPError NPP_GetValue(NPP instance, NPPVariable variable, void *value) {
-    if (variable == NPPVpluginScriptableNPObject) {
-      void **v = static_cast<void **>(value);
-      NPObject *obj = static_cast<NPObject *>(instance->pdata);
-
-      // Return value is expected to be retained
-      GLUE_PROFILE_START(instance, "retainobject");
-      NPN_RetainObject(obj);
-      GLUE_PROFILE_STOP(instance, "retainobject");
-      *v = obj;
-      return NPERR_NO_ERROR;
-    }
-    return NPERR_GENERIC_ERROR;
-  }
-
-  NPError NPP_SetValue(NPP instance, NPNVariable variable, void *value) {
-    return NPERR_GENERIC_ERROR;
   }
 }  // extern "C"

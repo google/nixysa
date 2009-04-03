@@ -31,5 +31,6 @@ extern "C" {
         return NPERR_INVALID_PARAM;
         break;
     }
+    return NPERR_NO_ERROR;
   }
 }

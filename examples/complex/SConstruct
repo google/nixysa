@@ -27,8 +27,10 @@ env = Environment(
     GLUE_DIR = 'glue',
     CPPPATH=['.', '$STATIC_GLUE_DIR', '$NPAPI_DIR', '$GLUE_DIR']
 )
+env.Append(ENV={'PYTHON': sys.executable})
 if sys.platform == 'win32':
-  env.Append(CODEGEN = 'codegen.bat')
+  env.Append(CODEGEN = 'codegen.bat',
+             CPPDEFINES = ['WIN32', 'OS_WINDOWS'])
 else:
   env.Append(CODEGEN = 'codegen.sh')
 
@@ -39,12 +41,13 @@ def NixysaEmitter(target, source, env):
   targets += ['$GLUE_DIR/hash', '$GLUE_DIR/parsetab.py']
   return targets, source
 
-NIXYSA_CMDLINE = ' '.join(['$NIXYSA_DIR/$CODEGEN',
+NIXYSA_CMDLINE = ' '.join([env.File('$NIXYSA_DIR/$CODEGEN').abspath,
                            '--output-dir=$GLUE_DIR',
                            '--generate=npapi',
                            '$SOURCES'])
 
-env['BUILDERS']['Nixysa'] = Builder(action=NIXYSA_CMDLINE, emitter=NixysaEmitter)
+env['BUILDERS']['Nixysa'] = Builder(action=NIXYSA_CMDLINE,
+                                    emitter=NixysaEmitter)
 
 AUTOGEN_OUTPUT = env.Nixysa(IDL_SOURCES)
 AUTOGEN_CC_FILES = [f for f in AUTOGEN_OUTPUT if f.suffix == '.cc']

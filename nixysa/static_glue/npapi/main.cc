@@ -30,7 +30,7 @@ void SetLastError(NPP npp, const char *error) {
 extern "C" {
   NPError OSCALL NP_GetEntryPoints(NPPluginFuncs *pluginFuncs) {
     pluginFuncs->version = 11;
-    pluginFuncs->size = sizeof(pluginFuncs);
+    pluginFuncs->size = sizeof(*pluginFuncs);
     pluginFuncs->newp = NPP_New;
     pluginFuncs->destroy = NPP_Destroy;
     pluginFuncs->setwindow = NPP_SetWindow;
@@ -48,6 +48,11 @@ extern "C" {
     return NPERR_NO_ERROR;
   }
 
+#ifdef OS_WINDOWS
+  NPError OSCALL NP_Initialize(NPNetscapeFuncs *browserFuncs) {
+    return InitializeNPNApi(browserFuncs);
+  }
+#else
   NPError OSCALL NP_Initialize(NPNetscapeFuncs *browserFuncs,
                                NPPluginFuncs *pluginFuncs) {
     NPError retval = InitializeNPNApi(browserFuncs);
@@ -55,6 +60,7 @@ extern "C" {
     NP_GetEntryPoints(pluginFuncs);
     return NPERR_NO_ERROR;
   }
+#endif
 
   NPError OSCALL NP_Shutdown(void) {
     return NPERR_NO_ERROR;

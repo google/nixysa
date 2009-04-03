@@ -15,8 +15,8 @@ REM limitations under the License.
 
 set THIRD_PARTY=%~dp0..\third_party
 set PYTHONPATH=%PYTHONPATH%;%THIRD_PARTY%\gflags-1.0\python;%THIRD_PARTY%\ply-3.1
-if not "%PYTHON"=="" goto :RUN
-PYTHON=python.exe
+if not "%PYTHON%"=="" goto :RUN
+set PYTHON=python.exe
 
 :RUN
-%PYTHON% %~dp0codegen.py
+%PYTHON% %~dp0codegen.py %*

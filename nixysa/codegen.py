@@ -16,7 +16,9 @@
 
 """Code generator
 
-Code generator for Client3D
+This file is the main entry point for the code generator.
+To use:
+ codegen.py --output-dir=output-path --generate=npapi file1.idl file2.idl ...
 """
 
 import glob

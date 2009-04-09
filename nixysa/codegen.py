@@ -46,6 +46,7 @@ import callback_binding
 import by_value_binding
 import by_pointer_binding
 import unsized_array_binding
+import nullable_binding
 
 generators = {'header': header_generator,
               'jsheader': js_header_generator,
@@ -57,7 +58,8 @@ binding_models = {'pod': pod_binding,
                   'enum': enum_binding,
                   'by_value': by_value_binding,
                   'by_pointer': by_pointer_binding,
-                  'unsized_array': unsized_array_binding}
+                  'unsized_array': unsized_array_binding,
+                  'nullable': nullable_binding}
 
 
 FLAGS = gflags.FLAGS

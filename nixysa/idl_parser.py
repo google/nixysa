@@ -131,7 +131,7 @@ class Parser(object):
             ('ccomment', 'exclusive'),
             ('string', 'exclusive'))
 
-  literals = ['{', '}', '(', ')', '[', ']', ';', ':', ',', '=']
+  literals = ['{', '}', '(', ')', '[', ']', ';', ':', ',', '=', '?']
 
   # Tokens
   t_ignore = ' \t\r'
@@ -484,8 +484,9 @@ class Parser(object):
   def p_type_reference(self, p):
     """ type_reference : type_name
                        | scoped_type_reference
-                       | unsized_array_type_refrence
-                       | sized_array_type_refrence"""
+                       | unsized_array_type_reference
+                       | sized_array_type_reference
+                       | nullable_type_reference"""
     p[0] = p[1]
 
   def p_type_name(self, p):
@@ -502,12 +503,17 @@ class Parser(object):
     p[0] = syntax_tree.ScopedTypeReference(self._GetLocation(), p[1], p[4])
 
   def p_unsized_array_type_reference(self, p):
-    "unsized_array_type_refrence : type_reference '[' ']'"
+    "unsized_array_type_reference : type_reference '[' ']'"
     p[0] = syntax_tree.ArrayTypeReference(self._GetLocation(), p[1], None)
 
   def p_sized_array_type_reference(self, p):
-    "sized_array_type_refrence : type_reference '[' NUMBER ']'"
+    "sized_array_type_reference : type_reference '[' NUMBER ']'"
     p[0] = syntax_tree.ArrayTypeReference(self._GetLocation(), p[1], p[3])
+
+  def p_nullable_type_reference(self, p):
+    "nullable_type_reference : type_reference '?'"
+    p[0] = syntax_tree.QualifiedTypeReference(self._GetLocation(),
+                                              'nullable', p[1])
 
   def p_empty(self, p):
     'empty : '

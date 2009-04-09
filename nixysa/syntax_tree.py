@@ -259,7 +259,7 @@ class QualifiedTypeReference(TypeReference):
   """Class representing a type reference with a qualifier.
 
   This class represents the reference to a type that is specialized by a type
-  qualifier, such as const or volatile.
+  qualifier, such as const or volatile or nullable.
 
   Produced by the IDL construct 'qualifier TypeRef' where qualifier is a type
   qualifier (const, restrict, volatile), and TypeRef is a type reference.
@@ -281,10 +281,13 @@ class QualifiedTypeReference(TypeReference):
   def GetTypeInternal(self, context, scoped):
     """Implementation of the type look-up for QualifiedTypeReference."""
     type_defn = self.type_ref.GetTypeInternal(context, scoped)
-    # TODO: do we want to do anything with the qualifiers ? similarly to arrays,
-    # qualified references are not definitions per say. A Type object, separate
-    # from the definition itself would be needed.
-    return type_defn
+    if type_defn:
+      if self.qualifier == 'nullable':
+        return type_defn.GetNullableType()
+      else:
+        return type_defn
+    else:
+      return None
 
   def __str__(self):
     return '%s %s' % (self.qualifier, self.type_ref)
@@ -312,6 +315,7 @@ class Definition(object):
     parent: the parent scope of that definition
     array_defns: a dictionary of array definitions of this type, hashed by the
       array size. Empty for non-types
+    nullable: the nullable form of this type.
     binding_model: the binding model module for this type. None for non-types
   """
   defn_type = 'Definition'
@@ -332,6 +336,7 @@ class Definition(object):
     self.is_scope = False
     self.parent = None
     self.array_defns = {}
+    self.nullable = None
     self.binding_model = None
 
   def __repr__(self):
@@ -414,6 +419,8 @@ class Definition(object):
     """
     for k in self.array_defns:
       self.array_defns[k].SetBindingModel(binding_models)
+    if self.nullable and self.nullable != self:
+      self.nullable.SetBindingModel(binding_models)
     name = self.LookUpBindingModel()
     try:
       self.binding_model = binding_models[name]
@@ -421,7 +428,7 @@ class Definition(object):
       raise UnknownBindingModelError(name)
 
   def GetArrayType(self, size):
-    """Returns a Description representing an array of this type.
+    """Returns a Definition representing an array of this type.
 
     This method returns a Description representing an array of this type.
     Arrays of the same data type and same size are shared.
@@ -447,6 +454,12 @@ class Definition(object):
       array = Array(self, size)
       self.array_defns[size] = array
       return array
+
+  def GetNullableType(self):
+    """Returns a Definition representing a nullable version of this type."""
+    if not self.nullable:
+      self.nullable = Nullable(self)
+    return self.nullable
 
   # members to be overridden by sub-types
   def LookUpBindingModel(self):
@@ -1117,6 +1130,37 @@ class Array(Definition):
       return 'sized_array'
     else:
       return 'unsized_array'
+
+
+class Nullable(Definition):
+  """Nullable definition.
+
+  Nullable objects are those that can have a null value. They are not
+  defined explicitly in IDL, but implicitly through nullable references.
+  Nullables are types.
+
+  Attributes:
+    data_type: the type this Nullable has when it is not null.
+  """
+  defn_type = 'Nullable'
+
+  def __init__(self, data_type):
+    """Inits an Array instance.
+
+    Args:
+      data_type: the type this Nullable has when it is not null.
+    """
+    Definition.__init__(self, data_type.source, [], None)
+    self.data_type = data_type
+    self.is_type = True
+    self.nullable = self
+
+  def __repr__(self):
+    return '%s?' % str(self.data_type)
+
+  def LookUpBindingModel(self):
+    """Implementation of LookUpBindingModel for Nullable."""
+    return 'nullable'
 
 
 def CheckTypeInChain(type_defn, chain_head):

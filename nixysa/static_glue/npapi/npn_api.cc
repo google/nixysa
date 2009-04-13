@@ -275,7 +275,19 @@ NPUTF8 *NPN_UTF8FromIdentifier(NPIdentifier identifier) {
 }
 
 int32_t NPN_IntFromIdentifier(NPIdentifier identifier) {
-  return g_browser_functions.intfromidentifier(identifier);
+  if (g_browser_functions.intfromidentifier != NULL) {
+    return g_browser_functions.intfromidentifier(identifier);
+  } else {
+    int32_t result = 0;
+    NPUTF8 *str = NPN_UTF8FromIdentifier(identifier);
+    if (str != NULL) {
+      result = atoi(str);
+      NPN_MemFree(str);
+    } else if (identifier != 0) {  // Safari 3.0 just gives us an int*
+      result = *static_cast<int32_t*>(identifier);
+    }
+    return result;
+  }
 }
 
 NPObject *NPN_CreateObject(NPP npp, NPClass *_class) {

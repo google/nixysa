@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// This file provides a stub implementation of most plug-in entrypoints.
+// This file provides a stub implementation of most plugin entrypoints.
 
 #include <npapi.h>
 #include "npn_api.h"

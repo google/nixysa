@@ -70,7 +70,7 @@ extern "C" {
                   int16_t argc, char *argn[], char *argv[],
                   NPSavedData *saved) {
     glue::InitializeGlue(instance);
-    NPObject *object = glue::CreateStaticNPObject(instance, NULL);
+    NPObject *object = glue::CreateStaticNPObject(instance);
     instance->pdata = object;
     return NPERR_NO_ERROR;
   }

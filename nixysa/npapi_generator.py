@@ -111,9 +111,11 @@ _enumerate_method_entries = """
 _class_glue_header_static = """
 void InitializeGlue(NPP npp);
 NPClass *GetStaticNPClass(void);
-glue::globals::NPAPIObject *CreateStaticNPObject(
-    NPP npp,
-    glue::globals::NPAPIObject *base);
+glue::globals::NPAPIObject *CreateRawStaticNPObject(NPP npp);
+void RegisterObjectBases(glue::globals::NPAPIObject *namespace_object,
+                         glue::globals::NPAPIObject *root_object);
+glue::globals::NPAPIObject *GetStaticNPObject(
+    glue::globals::NPAPIObject *root_object);
 void StaticEnumeratePropertyHelper(NPIdentifier *output);
 uint32_t GetStaticPropertyCount();
 bool StaticInvoke(glue::globals::NPAPIObject *object,
@@ -257,18 +259,22 @@ static void InitializeStaticIds(NPP npp) {
   ${#InitNamespaceGlues}
 }
 
-glue::globals::NPAPIObject *CreateStaticNPObject(
-    NPP npp,
-    glue::globals::NPAPIObject *base) {
+glue::globals::NPAPIObject *CreateRawStaticNPObject(NPP npp) {
   GLUE_PROFILE_START(npp, "createobject");
   glue::globals::NPAPIObject *object =
       static_cast<glue::globals::NPAPIObject *>(
           NPN_CreateObject(npp, &static_npclass));
   GLUE_PROFILE_STOP(npp, "createobject");
-  object->set_base(base);
   ${#CreateNamespaces}
   return object;
 }
+
+void RegisterObjectBases(glue::globals::NPAPIObject *namespace_object,
+                         glue::globals::NPAPIObject *root_object) {
+  ${#RegisterBases}
+}
+
+${#GetStaticObjects}
 
 bool StaticInvokeDefault(NPObject *header,
                          const NPVariant *args,
@@ -879,8 +885,49 @@ _initialize_glue_template = string.Template(
 
 _create_namespace_template = string.Template("""
 object->SetNamespaceObject(${PROPERTY},
-    ${Namespace}::CreateStaticNPObject(npp, object));""")
+    ${Namespace}::CreateRawStaticNPObject(npp));""")
 
+_register_base_template = string.Template("""
+{
+  glue::globals::NPAPIObject *object =
+      namespace_object->GetNamespaceObjectByIndex(${PROPERTY});
+  object->set_base(${BaseClassNamespace}::GetStaticNPObject(root_object));
+  ${Namespace}::RegisterObjectBases(object, root_object);
+}""")
+
+_register_no_base_template = string.Template("""
+{
+  glue::globals::NPAPIObject *object =
+      namespace_object->GetNamespaceObjectByIndex(${PROPERTY});
+  ${Namespace}::RegisterObjectBases(object, root_object);
+}""")
+
+_get_ns_object_template = string.Template("""
+namespace ${Namespace} {
+glue::globals::NPAPIObject *GetStaticNPObject(
+    glue::globals::NPAPIObject *root_object) {
+  glue::globals::NPAPIObject *parent =
+      ${ParentNamespace}::GetStaticNPObject(root_object);
+  return parent->GetNamespaceObjectByIndex(${PROPERTY});
+}
+}  // namespace ${Namespace}""")
+
+_globals_glue_header_tail = """
+glue::globals::NPAPIObject *CreateStaticNPObject(NPP npp);
+"""
+
+_globals_glue_cpp_tail = """
+glue::globals::NPAPIObject *GetStaticNPObject(
+    glue::globals::NPAPIObject *root_object) {
+  return root_object;
+}
+
+glue::globals::NPAPIObject *CreateStaticNPObject(NPP npp) {
+  glue::globals::NPAPIObject *root_object = CreateRawStaticNPObject(npp);
+  RegisterObjectBases(root_object, root_object);
+  return root_object;
+}
+"""
 
 # code pieces templates
 
@@ -1009,6 +1056,25 @@ def GenNamespaceCode(context):
       context.namespace_create_section.EmitCode(
           _create_namespace_template.substitute(PROPERTY=id_enum,
                                                 Namespace=full_namespace))
+      if ns_obj.defn_type == 'Class' and ns_obj.base_type:
+        base_class_namespace = npapi_utils.GetGlueFullNamespace(
+            ns_obj.base_type.GetFinalType())
+        context.namespace_register_base_section.EmitCode(
+            _register_base_template.substitute(
+                PROPERTY=id_enum,
+                BaseClassNamespace=base_class_namespace,
+                Namespace=full_namespace))
+      else:
+        context.namespace_register_base_section.EmitCode(
+            _register_no_base_template.substitute(PROPERTY=id_enum,
+                                                  Namespace=full_namespace))
+
+      context.namespace_get_static_object_section.EmitCode(
+          _get_ns_object_template.substitute(
+              Namespace=npapi_utils.GetGlueNamespace(ns_obj.GetFinalType()),
+              ParentNamespace=npapi_utils.GetGlueFullNamespace(
+                  ns_obj.parent.GetFinalType()),
+              PROPERTY=id_enum))
   return npapi_utils.MakeIdTableDict(namespace_ids, 'namespace')
 
 
@@ -1082,6 +1148,10 @@ class NpapiGenerator(object):
         namespaces in the static object will go.
       namespace_create_section: a section where the globals::NPAPIObject
         creation code will go.
+      namespace_register_base_section: a section where the class bases get
+        registered into their corresponding globals::NPAPIObject.
+      namespace_get_static_object_section: a section where the
+        GetStaticNPObject functions get defined.
       static_invoke_section: a section where the Invoke implementation for the
         static object will go (for static functions).
       static_invoke_default_section: a section where the InvokeDefault
@@ -1101,6 +1171,8 @@ class NpapiGenerator(object):
 
     _sections = [('namespace_init_section', 'InitNamespaceGlues'),
                  ('namespace_create_section', 'CreateNamespaces'),
+                 ('namespace_register_base_section', 'RegisterBases'),
+                 ('namespace_get_static_object_section', 'GetStaticObjects'),
                  ('static_invoke_section', 'StaticInvokeCode'),
                  ('static_invoke_default_section', 'StaticInvokeDefaultCode'),
                  ('static_get_prop_section', 'StaticGetPropertyCode'),
@@ -2232,6 +2304,9 @@ class NpapiGenerator(object):
 
     context.cpp_section.EmitTemplate(
         temp_template.safe_substitute(substitution_dict))
+
+    context.header_section.EmitCode(_globals_glue_header_tail)
+    context.cpp_section.EmitCode(_globals_glue_cpp_tail)
 
     includes = set(GetGlueHeader(ns_obj.source.file) for ns_obj in
                    context.namespace_list)

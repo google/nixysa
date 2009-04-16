@@ -34,6 +34,9 @@ class NPAPIObject : public NPObject {
   void SetNamespaceObject(int i, NPAPIObject *object) {
     namespaces_[i] = object;
   }
+  NPAPIObject *GetNamespaceObjectByIndex(int i) {
+    return namespaces_[i];
+  }
   NPAPIObject *GetNamespaceObject(NPIdentifier name) {
     DebugScopedId id(name);  // debug helper
     for (int i = 0; i < count_; ++i)

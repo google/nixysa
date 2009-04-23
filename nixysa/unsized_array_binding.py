@@ -389,8 +389,13 @@ do {
   }
   NPObject *npobject = NPVARIANT_TO_OBJECT(${input});
   NPVariant value;
-  if (!GetNPObjectProperty(${npp}, npobject, "length", &value) ||
-      !NPVARIANT_IS_NUMBER(value)) {
+  if (!GetNPObjectProperty(${npp}, npobject, "length", &value)) {
+    ${success} = false;
+    *error_handle = "Error in " ${context} 
+        ": input had no valid length property.";
+  }
+  if (!NPVARIANT_IS_NUMBER(value)) {
+    NPN_ReleaseVariantValue(&value);
     ${success} = false;
     *error_handle = "Error in " ${context} 
         ": input had no valid numeric length property.";
@@ -407,6 +412,7 @@ do {
       break;
     }
     ${GetValue}
+    NPN_ReleaseVariantValue(&value);
     if (!${success}) {
       *error_handle = "Exception while validating " ${context}
           ": a value at an index less than or equal to the "

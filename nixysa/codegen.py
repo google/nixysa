@@ -37,7 +37,6 @@ import syntax_tree
 import header_generator
 import js_header_generator
 import npapi_generator
-import documentation_generator
 
 # default supported binding models
 import pod_binding
@@ -50,8 +49,7 @@ import nullable_binding
 
 generators = {'header': header_generator,
               'jsheader': js_header_generator,
-              'npapi': npapi_generator,
-              'documentation': documentation_generator}
+              'npapi': npapi_generator}
 
 binding_models = {'pod': pod_binding,
                   'callback': callback_binding,

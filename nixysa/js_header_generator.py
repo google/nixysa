@@ -23,7 +23,10 @@ documentation file from the parsed syntax tree.
 import cpp_utils
 import java_utils
 import naming
+import gflags
 
+gflags.DEFINE_boolean('force-docs', False, 'force all members to have'
+                      ' documentation blocks or else raise an exception.')
 
 class UndocumentedError(Exception):
   """Error raised when a member is undocumented."""
@@ -52,7 +55,7 @@ class JSHeaderGenerator(object):
 
   def __init__(self, output_dir):
     self._output_dir = output_dir
-    self.force_documentation = False
+    self.force_documentation = gflags.FLAGS['force-docs'].value;
 
   def GetSectionFromAttributes(self, parent_section, defn):
     """Gets the code section appropriate for a given definition.

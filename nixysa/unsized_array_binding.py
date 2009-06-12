@@ -472,7 +472,7 @@ ${Type} ${variable} = ${expr};
 NPObject *${variable}_npobject = CreateArray(${npp});
 static const char *array_push_identifier = "push";
 NPIdentifier identifier = NPN_GetStringIdentifier(array_push_identifier);
-for (int i = 0; i < ${variable}.size(); ++i) {
+for (${Type}::size_type i = 0; i < ${variable}.size(); ++i) {
   NPVariant value;
   ${SetValuePre}
   if (!${success}) break;

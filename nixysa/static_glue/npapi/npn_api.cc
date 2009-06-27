@@ -259,7 +259,16 @@ NPIdentifier NPN_GetStringIdentifier(const NPUTF8 *name) {
 void NPN_GetStringIdentifiers(const NPUTF8 **names,
                               int32_t count,
                               NPIdentifier *identifiers) {
+#ifdef OS_LINUX
+  // GetStringIdentifiers is broken in nspluginwrapper 1.2.0 and 1.2.2 so we
+  // use GetStringIdentifier instead for maximum compatibility. See
+  // https://www.redhat.com/archives/nspluginwrapper-devel-list/2009-June/msg00000.html
+  for (int32_t i = 0; i < count; ++i) {
+    identifiers[i] = NPN_GetStringIdentifier(names[i]);
+  }
+#else
   g_browser_functions.getstringidentifiers(names, count, identifiers);
+#endif
 }
 
 NPIdentifier NPN_GetIntIdentifier(int32_t intid) {

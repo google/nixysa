@@ -62,5 +62,5 @@ def FailIfHaveErrors():
   if _num_errors > 0 or _num_warnings > 0:
     print >> sys.stderr, 'Num Errors:', _num_errors
     print >> sys.stderr, 'Num Warnings:', _num_warnings
-  if _num_errors > 0
+  if _num_errors > 0:
     sys.exit(1)

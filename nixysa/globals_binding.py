@@ -22,8 +22,8 @@ functions and variables. This binding model isn't used on any type, but only
 implicitly on namespaces.
 """
 
+import sys
 import cpp_utils
-
 
 class InvalidUsage(Exception):
   """Raised when the namespace is used as a type."""
@@ -303,6 +303,25 @@ def CppGetStatic(scope, namespace, field):
   """
   namespace = namespace  # silence gpylint.
   return cpp_utils.GetScopedName(scope, field)
+
+
+def JSDocTypeString(type_defn):
+  """Gets the representation of a type in JSDoc notation.
+
+  Args:
+    type_defn: a Definition for the type.
+
+  Returns:
+    a string that is the JSDoc notation of type_defn.
+  """
+  type_defn = type_defn.GetFinalType()
+  type_stack = type_defn.GetParentScopeStack()
+  name = type_defn.name
+  name = '.'.join([s.name for s in type_stack[1:]] + [name])
+  print >> sys.stderr, (
+      'WARINING: %s : Global Binding not yet supported for JSDocs for type: %s'
+      % (type_defn.source, name))
+  return name
 
 
 def NpapiBindingGlueHeader(scope, type_defn):

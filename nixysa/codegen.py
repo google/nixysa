@@ -32,9 +32,11 @@ import gflags
 # local imports
 import idl_parser
 import syntax_tree
+import log
 
 # default supported generators
 import header_generator
+import cpp_header_generator
 import js_header_generator
 import npapi_generator
 
@@ -48,6 +50,7 @@ import unsized_array_binding
 import nullable_binding
 
 generators = {'header': header_generator,
+              'cppheader': cpp_header_generator,
               'jsheader': js_header_generator,
               'npapi': npapi_generator}
 
@@ -74,6 +77,10 @@ gflags.DEFINE_multistring('generate', [], 'the generator to use')
 gflags.DEFINE_string('output-dir', '.', 'the output directory')
 gflags.DEFINE_boolean('force', False, 'force generation even if the source'
                       ' files have not changed')
+gflags.DEFINE_boolean('force-docs', False, 'force all members to have'
+                      ' documentation blocks or else raise an exception.')
+gflags.DEFINE_boolean('no-return-docs', False, 'remove docs marked as'
+                      ' noreturndocs.')
 
 class NativeType(syntax_tree.Definition):
   defn_type = 'Native'
@@ -192,6 +199,7 @@ def main(argv):
   hash_file = open(hash_filename, 'w')
   hash_file.write(hash_value)
   hash_file.close()
+  log.FailIfHaveErrors()
 
 
 if __name__ == '__main__':

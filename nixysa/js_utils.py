@@ -14,35 +14,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Utilities for C++ code generation.
+"""Utilities for Javascript code generation.
 
-This module contains a few utilities for C++ code generation.
+This module contains a few utilities for Javascript code generation.
 """
 
 import re
+import sys
 import naming
+import gflags
+import log
+import cpp_utils
 
 
-def GetCommonPrefixLength(list1, list2):
-  """Returns the length of the common prefix between two lists.
-
-  Args:
-    list1: the first list.
-    list2: the second list.
-
-  Returns:
-    the highest n such as list1[:n] == list2[:n]
-  """
-  l = min(len(list1), len(list2))
-  for i in range(0, l):
-    if list1[i] != list2[i]: return i
-  return l
+_doxygen_tag_re = re.compile(r'\s*\\(\w+) ')
+_param_re = re.compile(r'\s*\\param (\w+) (.*?)$')
+_non_id_re = re.compile(r'[^A-Z0-9_]')
 
 
-def GetScopePrefixWithScopeOperator(scope, type_defn, scope_operator):
+def GetScopePrefix(scope, type_defn, scope_operator):
   """Gets the prefix string to reference a type from a given scope.
 
-  This function returns a concatenation of scope operators such as, in the
+  This function returns a concatenation of js scope operators such as, in the
   context of the given scope, when prefixing the name of the given type, it
   will reference exactly that type.
 
@@ -66,41 +59,7 @@ def GetScopePrefixWithScopeOperator(scope, type_defn, scope_operator):
   Returns:
     the prefix string.
   """
-  type_stack = type_defn.GetParentScopeStack()
-  scope_stack = scope.GetParentScopeStack() + [scope]
-  common_prefix = GetCommonPrefixLength([scope.name for scope in scope_stack],
-                                        [scope.name for scope in type_stack])
-  return scope_operator.join(
-      [s.name for s in type_stack[common_prefix:]] + [''])
-
-
-def GetScopePrefix(scope, type_defn):
-  """Gets the prefix string to reference a type from a given scope.
-
-  This function returns a concatenation of C++ scope operators such as, in the
-  context of the given scope, when prefixing the name of the given type, it
-  will reference exactly that type.
-
-  For example, given:
-  namespace A {
-    namespace B {
-      class C;
-    }
-    namespace D {
-      void F();
-    }
-  }
-  To access C from F, one needs to refer to it by B::C. This function will
-  return the 'B::' part.
-
-  Args:
-    scope: the Definition for the scope from which the type must be accessed.
-    type_defn: the Definition for the type which must be accessed.
-
-  Returns:
-    the prefix string.
-  """
-  return GetScopePrefixWithScopeOperator(scope, type_defn, '::')
+  return cpp_utils.GetScopePrefixWithScopeOperator(scope, type_defn, '.')
 
 
 def GetScopedName(scope, type_defn):
@@ -130,6 +89,40 @@ def GetScopedName(scope, type_defn):
     the scoped reference string.
   """
   return GetScopePrefix(scope, type_defn) + type_defn.name
+
+
+def GetFullyQualifiedScopePrefix(scope):
+  """Gets the fully qualified scope prefix.
+
+  Args:
+    scope: the Definition for the scope from which the type must be accessed.
+
+  Returns:
+    the fully qualified scope prefix string.
+  """
+  scope_stack = scope.GetParentScopeStack() + [scope]
+  return '.'.join([s.name for s in scope_stack[1:]] + [''])
+
+
+def GetFullyQualifiedTypeName(type_defn):
+  """Gets the fully qualified name for a type
+
+  Args:
+    type_defn: the type definition you want a name for.
+
+  Returns:
+    the fully qualified name string.
+  """
+  return type_defn.binding_model.JSDocTypeString(type_defn)
+
+
+def GetFullyQualifiedTypeString(type_defn):
+  """
+  """
+  type_defn = type_defn.GetFinalType()
+  type_stack = type_defn.GetParentScopeStack()
+  name = type_defn.name
+  return '.'.join([s.name for s in type_stack[1:]] + [name])
 
 
 def GetGetterName(field):
@@ -175,7 +168,7 @@ def GetFunctionParamPrototype(scope, param):
 
   Returns:
     a (string, list) pair. The string is the declaration of the parameter in
-    the prototype. The list contains (bool, Definition) pairs, describing the
+    the prototype. The list contains (nam, Definition) pairs, describing the
     types that need to be forward-declared (bool is false) or defined (bool is
     true).
   """
@@ -184,76 +177,130 @@ def GetFunctionParamPrototype(scope, param):
     text, need_defn = bm.CppMutableParameterString(scope, param.type_defn)
   else:
     text, need_defn = bm.CppParameterString(scope, param.type_defn)
-  return '%s %s' % (text, param.name), [(need_defn, param.type_defn)]
+  name = naming.Normalize(param.name, naming.Java)
+  return name, [(name, param.type_defn)]
 
 
-def GetFunctionPrototype(scope, obj, id_prefix):
+def GetFunctionPrototype(scope, obj, member):
   """Gets the string needed to declare a function prototype.
 
   Args:
     scope: the scope of the prototype.
     obj: the function to declare.
-    id_prefix: a string that is used as a prefix to the identifier, to be able
-               to declare a member function for example (id_prefix would be
-               'Class::').
+    member: True if member function
 
   Returns:
-    a (string, list) pair. The string is the prototype. The list contains
-    (bool, Definition) pairs, describing the types that need to be
-    forward-declared (bool is false) or defined (bool is true).
+    A string prototype.
   """
-  check_types = []
-  param_strings = []
-  for p in obj.params:
-    param_string, check_type = GetFunctionParamPrototype(scope, p)
-    check_types += check_type
-    param_strings += [param_string]
+  id_prefix = GetFullyQualifiedScopePrefix(scope)
+  proto = ''
+  if member:
+    proto = 'prototype.'
+  param_strings = [GetFunctionParamPrototype(scope, p)[0] for p in obj.params]
   param_string = ', '.join(param_strings)
-  prefix_strings = []
-  suffix_strings = []
-  for attrib in ['static', 'virtual', 'inline']:
-    if attrib in obj.attributes:
-      prefix_strings.append(attrib)
-  if prefix_strings:
-    prefix_strings.append('')
-  if 'const' in obj.attributes:
-    suffix_strings.append('const')
-  if 'pure' in obj.attributes:
-    suffix_strings.append('= 0')
-  if suffix_strings:
-    suffix_strings.insert(0, '')
-  prefix = ' '.join(prefix_strings)
-  suffix = ' '.join(suffix_strings)
-  if obj.type_defn:
-    bm = obj.type_defn.binding_model
-    text, need_defn = bm.CppReturnValueString(scope, obj.type_defn)
-    check_types += [(need_defn, obj.type_defn)]
-    prototype = '%s%s %s%s(%s)%s' % (prefix, text, id_prefix, obj.name,
-                                     param_string, suffix)
-  else:
-    prototype = '%s%s%s(%s)%s' % (prefix, id_prefix, obj.name, param_string,
-                                  suffix)
-  return prototype, check_types
+  prototype = '%s%s%s = function(%s) { };' % (
+      id_prefix, proto, naming.Normalize(obj.name, naming.Java), param_string)
+  return prototype
 
 
-def MakeHeaderToken(filename):
-  """Generates a header guard token.
+def GetFunctionParamType(obj, param_name):
+  """Gets the type of a function param.
 
   Args:
-    filename: the name of the header file
+    obj: The function.
+    param_name: The name of the parameter.
+
+  Returns
+    A string which is the type of the parameter.
+  """
+  if param_name[-1] == '?':
+    param_name = param_name[:-1]
+  for p in obj.params:
+    if p.name == param_name:
+      return GetFullyQualifiedTypeName(p.type_defn)
+  log.SourceError(obj.source, 'No param "%s" on function "%s"' %
+                  (param_name, obj.name))
+  return '*'
+
+
+def GetCommentsForParams(func):
+  """Gets the comments for the params.
+
+  Args:
+    func: The function.
+    param: The parameter.
+  Returns:
+    a (string, dict) pair. The string is the comments minus the param parts.
+    The dict is a dict of param names to comments.
+  """
+  collecting_key = None
+  param_comments = {}
+  comments = []
+  comment_lines = func.attributes['__docs'].splitlines()
+  for line in comment_lines:
+    match = _doxygen_tag_re.match(line)
+    if match:
+      if match.group(1) == 'param':
+        match = _param_re.match(line)
+        if match:
+          collecting_key = match.group(1)
+          param_comments[collecting_key] = match.group(2)
+        else:
+          log.SourceError(func,
+              ('Incorrect format for param ' +
+               'comment for param "%s" on function "%s"') %
+               (param_name, func.name))
+      else:
+        comments += [line]
+        collecting_key = None
+    elif collecting_key:
+      param_comments[collecting_key] += '\n' + line
+    else:
+      comments += [line]
+  return '\n'.join(comments), param_comments
+
+
+def GetParamSpec(obj, param_name):
+  """Gets the parameter specification string for a function parameter.
+
+  Args:
+    obj: The function.
+    param_name: The name of the paramter.
 
   Returns:
-    the generated header guard token.
+    a string in JSDOC format for the parameter.
   """
-  return re.sub('[^A-Z0-9_]', '_', filename.upper()) + '__'
+  type = GetFunctionParamType(obj, param_name)
+  return '@param {%s} %s ' % (type, naming.Normalize(param_name, naming.Java))
 
 
-class CppFileWriter(object):
-  """C++ file writer class.
+def GetReturnSpec(obj, flags):
+  """Gets the return type specification string for a function.
 
-  This class helps with generating a C++ file by parts, by allowing delayed
-  construction of 'sections' inside the code, that can be filled later. For
-  example one can create a section for forward declarations, and add code to
+  Args:
+    obj: The function.
+    flags: An map of flags. The only one we care about is 'eat_lines' which
+        we'll set to True if the 'noreturndocs' attribute exists.
+
+  Returns:
+    a string in JSDOC format for the return type.
+  """
+  if gflags.FLAGS['no-return-docs'].value and 'noreturndocs' in obj.attributes:
+    flags['eat_lines'] = True
+    return ''
+  if obj.type_defn:
+    type = GetFullyQualifiedTypeName(obj.type_defn)
+  else:
+    type = "**unknown return type**"
+  return '@return {%s}' % type
+
+
+class JavascriptFileWriter(object):
+  """Javascript file writer class.
+
+  This class helps with generating a Javascript file by parts, by allowing
+  delayed construction of 'sections' inside the code, that can be filled later.
+  For example one can create a section for forward declarations, and add code to
   that section as the rest of the file gets written.
 
   It also provides facility to add #include lines, and header guards for header
@@ -263,7 +310,7 @@ class CppFileWriter(object):
   """
 
   class Section(object):
-    """C++ writer section class."""
+    """Javascript writer section class."""
     # this regexp is used for EmitTemplate. It maps {#SomeText} into 'section'
     # groups and the rest of the text into 'text' groups in the match objects.
     _template_re = re.compile(
@@ -281,7 +328,7 @@ class CppFileWriter(object):
         """, re.MULTILINE | re.VERBOSE)
 
     def __init__(self, indent_string, indent):
-      """Inits a CppFileWriter.Section.
+      """Inits a JavascriptFileWriter.Section.
 
       Args:
         indent_string: the string for one indentation.
@@ -322,7 +369,7 @@ class CppFileWriter(object):
       """
       if not indent:
         indent = self._indent
-      section = CppFileWriter.Section(self._indent_string, indent)
+      section = JavascriptFileWriter.Section(self._indent_string, indent)
       self._section_map[name] = section
       return section
 
@@ -388,7 +435,8 @@ class CppFileWriter(object):
       if not self._need_validate:
         return
       self._need_validate = False
-      l = GetCommonPrefixLength(self._fe_namespaces, self._be_namespaces)
+      l = cpp_utils.GetCommonPrefixLength(
+          self._fe_namespaces, self._be_namespaces)
       while len(self._be_namespaces) > l:
         name = self._be_namespaces.pop()
         self._code.append('}  // namespace %s' % name)
@@ -408,21 +456,10 @@ class CppFileWriter(object):
       """
       self._ValidateNamespace()
       for line in code.split('\n'):
-        line = line.strip('\t\r ')
         if not line:
           self._code.append('')
         else:
-          adjust_indent = 0
-          adjust_chars = ''
-          if line[0] == '}':
-            adjust_indent -= 1
-          if line[-1] == ':':
-            adjust_indent -= 1
-            adjust_chars = ' '
-          self._code.append(self._indent_string * (self._indent + adjust_indent)
-                            + adjust_chars + line)
-        if not re.search(r'\bnamespace\b', line):
-          self._indent += line.count('{') - line.count('}')
+          self._code.append(line)
 
     def EmitTemplate(self, template):
       """Emits a template at the current position.
@@ -502,7 +539,7 @@ class CppFileWriter(object):
       self._ValidateNamespace()
       lines = []
       for line in self._code:
-        if isinstance(line, CppFileWriter.Section):
+        if isinstance(line, JavascriptFileWriter.Section):
           lines.extend(line.GetLines())
         else:
           lines.append(line)
@@ -510,7 +547,7 @@ class CppFileWriter(object):
 
   def __init__(self, filename, is_header, header_token=None,
                indent_string='  '):
-    """Inits a CppFileWriter.
+    """Inits a JavascriptFileWriter.
 
     The file writer has a 'main section' where all the code will go. See
     CreateSection, EmitCode.
@@ -526,7 +563,7 @@ class CppFileWriter(object):
     """
     self._filename = filename
     self._is_header = is_header
-    self._header_token = header_token or MakeHeaderToken(filename)
+    self._header_token = ''
     self._includes = []
     self._include_section = self.Section(indent_string, 0)
     self._main_section = self.Section(indent_string, 0)
@@ -608,9 +645,6 @@ class CppFileWriter(object):
       a list of code lines.
     """
     lines = []
-    if self._is_header:
-      lines.extend(['#ifndef %s' % self._header_token,
-                    '#define %s' % self._header_token])
     include_lines = self._include_section.GetLines()
     if include_lines:
       lines.append('')
@@ -619,8 +653,6 @@ class CppFileWriter(object):
     if main_lines:
       lines.append('')
       lines.extend(main_lines)
-    if self._is_header:
-      lines.extend(['', '#endif  // %s' % self._header_token])
     return lines
 
   def Write(self):
@@ -633,7 +665,7 @@ class CppFileWriter(object):
     f.write('\n'.join(self.GetLines()))
     f.write('\n')
     f.close()
-    print 'Writing', self._filename
+    log.Info('Writing %s' % self._filename)
 
 
 def main():

@@ -277,6 +277,21 @@ def CppGetStatic(scope, type_defn, field):
                        cpp_utils.GetGetterName(field))
 
 
+def JSDocTypeString(type_defn):
+  """Gets the representation of a type in JSDoc notation.
+
+  Args:
+    type_defn: a Definition for the type.
+
+  Returns:
+    a string that is the JSDoc notation of type_defn.
+  """
+  type_defn = type_defn.GetFinalType()
+  type_stack = type_defn.GetParentScopeStack()
+  name = type_defn.name
+  return '**BP**!' + '.'.join([s.name for s in type_stack[1:]] + [name])
+
+
 _npapi_binding_glue_header_template = string.Template("""
 class NPAPIObject : public NPObject {
   NPP npp_;
@@ -383,11 +398,11 @@ if (NPVARIANT_IS_OBJECT(${input})) {
   if (npobject->_class == ${ClassGlueNS}::GetNPClass()) {
     ${variable} = static_cast<${ClassGlueNS}::NPAPIObject *>(npobject);
   } else {
-    *error_handle = "Error in " ${context} 
+    *error_handle = "Error in " ${context}
         ": type mismatch.";
   }
 } else {
-  *error_handle = "Error in " ${context} 
+  *error_handle = "Error in " ${context}
       ": was expecting an object.";
 }
 ${success} = ${variable} != NULL;

@@ -38,6 +38,16 @@ import cpp_utils
 import java_utils
 
 
+CPP_POD_TO_JSDOC_TYPES = {
+  'int': 'number',
+  'std.string' : 'string',
+  'bool' : 'boolean',
+  'float' : 'number',
+  'unsigned int' : 'number',
+  'size_t' : 'number',
+  'void' : 'void'};  # void is a special case. It's used for callbacks
+
+
 class InvalidPODUsage(Exception):
   """Raised when POD type is used incorrectly."""
   pass
@@ -343,6 +353,27 @@ def CppGetStatic(scope, type_defn, field):
   raise InvalidPODUsage
 
 
+def JSDocTypeString(type_defn):
+  """Gets the representation of a type in JSDoc notation.
+
+  Args:
+    type_defn: a Definition for the type.
+
+  Returns:
+    a string that is the JSDoc notation of type_defn.
+  """
+  type_defn = type_defn.GetFinalType()
+  type_stack = type_defn.GetParentScopeStack()
+  name = type_defn.name
+  type_string = '.'.join([s.name for s in type_stack[1:]] + [name])
+  if type_string in CPP_POD_TO_JSDOC_TYPES:
+    return CPP_POD_TO_JSDOC_TYPES[type_string]
+  print >> sys.stderr, (
+      'ERROR: %s : Unknown C++ Pod to JSDoc type conversion for C++ type: %s' %
+      (type_defn.source, type_string))
+  return '*'
+
+
 def NpapiBindingGlueHeader(scope, type_defn):
   """Gets the NPAPI glue header for a given type.
 
@@ -408,13 +439,13 @@ _wstring_from_npvariant_template = string.Template("""
 ${type} ${variable};
 if (!NPVARIANT_IS_STRING(${input}) {
   ${success} = false;
-  *error_handle = "Error in " ${context} 
+  *error_handle = "Error in " ${context}
       ": was expecting a string.";
 } else if (!UTF8ToString16(NPVARIANT_TO_STRING(${input}).utf8characters,
                     NPVARIANT_TO_STRING(${input}).utf8length,
                     &${variable})) {
   ${success} = false;
-  *error_handle = "Error in " ${context} 
+  *error_handle = "Error in " ${context}
       ": hit an unexpected unicode conversion problem.";
 }
 """)
@@ -426,7 +457,7 @@ if (NPVARIANT_IS_STRING(${input})) {
                         NPVARIANT_TO_STRING(${input}).utf8length);
 } else {
   ${success} = false;
-  *error_handle = "Error in " ${context} 
+  *error_handle = "Error in " ${context}
       ": was expecting a string.";
 }
 """)
@@ -436,7 +467,7 @@ _float_from_npvariant_template = string.Template("""
     if (NPVARIANT_IS_NUMBER(${input})) {
       ${variable} = static_cast<float>(NPVARIANT_TO_NUMBER(${input}));
     } else {
-      *error_handle = "Error in " ${context} 
+      *error_handle = "Error in " ${context}
           ": was expecting a float.";
       ${success} = false;
     }
@@ -447,7 +478,7 @@ _int_from_npvariant_template = string.Template("""
     if (NPVARIANT_IS_NUMBER(${input})) {
       ${variable} = static_cast<${type}>(NPVARIANT_TO_NUMBER(${input}));
     } else {
-      *error_handle = "Error in " ${context} 
+      *error_handle = "Error in " ${context}
           ": was expecting an int.";
       ${success} = false;
     }
@@ -458,7 +489,7 @@ _bool_from_npvariant_template = string.Template("""
     if (NPVARIANT_IS_BOOLEAN(${input})) {
       ${variable} = NPVARIANT_TO_BOOLEAN(${input});
     } else {
-      *error_handle = "Error in " ${context} 
+      *error_handle = "Error in " ${context}
           ": was expecting a boolean.";
       ${success} = false;
     }

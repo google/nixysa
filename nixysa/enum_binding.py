@@ -329,6 +329,21 @@ def NpapiBindingGlueCpp(scope, type_defn):
   raise InvalidEnumUsage
 
 
+def JSDocTypeString(type_defn):
+  """Gets the representation of a type in JSDoc notation.
+
+  Args:
+    type_defn: a Definition for the type.
+
+  Returns:
+    a string that is the JSDoc notation of type_defn.
+  """
+  type_defn = type_defn.GetFinalType()
+  type_stack = type_defn.GetParentScopeStack()
+  name = type_defn.name
+  return '.'.join([s.name for s in type_stack[1:]] + [name])
+
+
 def NpapiDispatchFunctionHeader(scope, type_defn, variable, npp, success):
   """Gets a header for NPAPI glue dispatch functions.
 
@@ -363,12 +378,12 @@ ${type} ${variable} = ${first};
 if (NPVARIANT_IS_NUMBER(${input})) {
   ${variable} = (${type})(int)NPVARIANT_TO_NUMBER(${input});
   if (${variable} < ${first} || ${variable} > ${last}) {
-    *error_handle = "Error in " ${context} 
+    *error_handle = "Error in " ${context}
         ": value out of range.";
     ${result} = false;
   }
 } else {
-  *error_handle = "Error in " ${context} 
+  *error_handle = "Error in " ${context}
       ": was expecting a number.";
   ${result} = false;
 }""")

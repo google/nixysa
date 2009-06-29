@@ -14,19 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Javascript JSCompiler and JSDocToolkit file generator.
+"""C++ header file generator.
 
-This module generates JSCompiler and JSDocToolkit file for a
-javascript documentation file from the parsed syntax tree.
+This module generates C++ header file for a javascript
+documentation file from the parsed syntax tree.
 """
 
-import re
 import cpp_utils
-import js_utils
+import gflags
 import java_utils
 import naming
-import log
-import syntax_tree
 
 
 class UndocumentedError(Exception):
@@ -37,12 +34,13 @@ class UndocumentedError(Exception):
     self.object = obj
 
 
-class JSHeaderGenerator(object):
+class CPPHeaderGenerator(object):
   """Header generator class.
 
-  This class takes care of the details of generating JavaScript JSDocToolkit
-  format files suitable for either documenation generation or for externs for
-  the JSCompiler.
+  This class takes care of the details of generating a C++ header file
+  containing all the definitions from a syntax tree. This particular
+  header generator does so with a slant on javascript. This means no
+  virtual, static, void, etc.
 
   It contains a list of functions named after each of the Definition classes in
   syntax_tree, with a common signature. The appropriate function will be called
@@ -52,17 +50,10 @@ class JSHeaderGenerator(object):
     _output_dir: output directory
     force_documentation: whether to force all members to have documentation
   """
-  _start_whitespace_re = re.compile(r'^(\s+)')
-  _param_re = re.compile(r'\\param (\w+) ')
-  _return_re = re.compile(r'\\return ')
-  _code_re = re.compile(r'\\code')
-  _li_re = re.compile(r'\\li')
-  _var_re = re.compile(r'\\var')
-  _sa_re = re.compile(r'\\sa')
-  _endcode_re = re.compile(r'\\endcode')
 
   def __init__(self, output_dir):
     self._output_dir = output_dir
+    self.force_documentation = gflags.FLAGS['force-docs'].value
 
   def GetSectionFromAttributes(self, parent_section, defn):
     """Gets the code section appropriate for a given definition.
@@ -94,7 +85,7 @@ class JSHeaderGenerator(object):
 
     Verbatim definitions being written for a particular type of output file,
     this function will check the 'verbatim' attribute, and only emit the
-    verbatim code if it is 'js_header'.
+    verbatim code if it is 'cpp_header'.
 
     Args:
       parent_section: the main section of the parent scope.
@@ -108,12 +99,13 @@ class JSHeaderGenerator(object):
     """
     scope = scope  # silence gpylint.
     try:
-      if obj.attributes['verbatim'] == 'js_header':
+      if obj.attributes['verbatim'] == 'cpp_header':
         section = self.GetSectionFromAttributes(parent_section, obj)
         section.EmitCode(obj.text)
     except KeyError:
-      log.SourceWarning(obj.source,
-                        'ignoring verbatim with no verbatim attribute')
+      source = obj.source
+      print ('%s:%d ignoring verbatim with no verbatim attribute' %
+             (source.file.source, source.line))
 
   def Typedef(self, parent_section, scope, obj):
     """Generates the code for a Typedef definition.
@@ -123,9 +115,10 @@ class JSHeaderGenerator(object):
       scope: the parent scope.
       obj: the Typedef definition.
     """
-    # typedefs do not get exported for JavaScript.
-    # silence lint
-    parent_section, scope, obj = parent_section, scope, obj
+    section = self.GetSectionFromAttributes(parent_section, obj)
+    bm = obj.type_defn.binding_model
+    type_string = bm.JavaMemberString(scope, obj.type_defn)
+    section.EmitCode('typedef %s %s;' % (type_string, obj.name))
 
   def Variable(self, parent_section, scope, obj):
     """Generates the code for a Variable definition.
@@ -141,19 +134,18 @@ class JSHeaderGenerator(object):
     member_section = self.GetSectionFromAttributes(parent_section, obj)
 
     bm = obj.type_defn.binding_model
-    id_prefix = js_utils.GetFullyQualifiedScopePrefix(scope)
-    proto = 'prototype.'
+    type_string = bm.JavaMemberString(scope, obj.type_defn)
     # Note: There is no static in javascript
     field_name = naming.Normalize(obj.name, naming.Java)
-    extra = ''
     if 'getter' in obj.attributes and 'setter' not in obj.attributes:
-      extra = '\n\nThis property is read-only.'
+      self.Documentation(member_section, obj,
+                         'This property is read-only.')
     elif 'getter' not in obj.attributes and 'setter' in obj.attributes:
-      extra = '\n\nThis property is write-only.'
-    type_string = '\n@type {%s}' % js_utils.GetFullyQualifiedTypeName(
-        obj.type_defn)
-    self.Documentation(member_section, obj, extra + type_string)
-    member_section.EmitCode('%s%s%s;' % (id_prefix, proto, field_name))
+      self.Documentation(member_section, obj,
+                         'This property is write-only.')
+    else:
+      self.Documentation(member_section, obj, '')
+    member_section.EmitCode('%s %s;' % (type_string, field_name))
     # Note: There are no getter/setter in javascript
 
   def Function(self, parent_section, scope, obj):
@@ -165,97 +157,9 @@ class JSHeaderGenerator(object):
       obj: the Function definition.
     """
     section = self.GetSectionFromAttributes(parent_section, obj)
-    return_type = '**not defined**'
-    if obj.type_defn:
-      return_type = js_utils.GetFullyQualifiedTypeName(obj.type_defn)
-    doc_info = self.Documentation(section, obj, '')
-    if doc_info:
-      # there was a return statement so the return type better NOT be void
-      if return_type == 'void':
-        log.SourceError(obj.source,
-                        'return found for void function: %s' % obj.name)
-    else:
-      # there was no return statement so the return type better be void
-      if (not return_type == 'void') and (not return_type == '**not defined**'):
-        log.SourceError('return missing for non void function: %s' % obj.name)
-    prototype = js_utils.GetFunctionPrototype(scope, obj, True)
-    section.EmitCode(prototype)
-
-  def OverloadedFunction(self, parent_section, scope, func_array):
-    """Generates the code for an Overloaded Function.
-
-    Args:
-      parent_section: the main section of the parent scope.
-      scope: the parent scope.
-      func_array: an array of function definition objects.
-    """
-    # merge the params.
-    params = []
-    min_params = len(func_array[0].params)
-    for func in func_array:
-      if len(func.params) < min_params:
-        min_params = len(func.params)
-      index = 0
-      # we only take the comment from the first function that documents
-      # a parameter at this position.
-      comments, param_comments = js_utils.GetCommentsForParams(func)
-      for param in func.params:
-        if len(params) <= index:
-          params.append({'orig_name': param.name,
-                         'new_name': param.name,
-                         'docs' : param_comments[param.name],
-                         'params': [{'param': param, 'func': func}]})
-        else:
-          params[index]['params'].append({'param': param, 'func': func})
-        index += 1
-
-    # rename the params.
-    index = 0
-    opt = ''
-    for param in params:
-      if index >= min_params:
-        opt = 'opt_'
-      param['new_name'] = '%sparam%d' % (opt, index + 1)
-      index += 1
-
-    # generate param comments.
-    param_comments = []
-    for param in params:
-      if len(param['params']) == 1:
-        param_string = js_utils.GetFunctionParamType(
-            param['params'][0]['func'],
-            param['params'][0]['param'].name)
-      else:
-        union_strings = []
-        for option in param['params']:
-          union_strings += [js_utils.GetFunctionParamType(
-              option['func'],
-              option['param'].name)]
-        param_string = '(' + '|'.join(union_strings) + ')'
-      param_comments += ['@param {%s} %s %s' % (param_string, param['new_name'],
-          param['docs'])]
-
-    first_func = func_array[0]
-
-    # use just the first function's comments.
-    func_comments = (js_utils.GetCommentsForParams(first_func)[0] +
-        '\n'.join(param_comments))
-
-    first_func.attributes['__docs'] = func_comments
-    section = self.GetSectionFromAttributes(parent_section, first_func)
-    self.Documentation(section, first_func, '')
-
-    param_strings = []
-    for param in params:
-      param_strings += [param['new_name']]
-
-    param_string = ', '.join(param_strings)
-    id_prefix = js_utils.GetFullyQualifiedScopePrefix(scope)
-    proto = 'prototype.'
-    prototype = '%s%s%s = function(%s) { };' % (
-        id_prefix, proto, naming.Normalize(first_func.name, naming.Java),
-        param_string)
-    section.EmitCode(prototype)
+    self.Documentation(section, obj, '')
+    prototype = java_utils.GetFunctionPrototype(scope, obj)
+    section.EmitCode(prototype + ';')
 
   def Callback(self, parent_section, scope, obj):
     """Generates the code for a Callback definition.
@@ -265,7 +169,10 @@ class JSHeaderGenerator(object):
       scope: the parent scope.
       obj: the Class definition.
     """
-    parent_section, scope, obj = parent_section, scope, obj
+    parent_section, scope, obj = parent_section, scope, obj  # silence gpylint
+    # TODO: implement this. Do we want to generate the C++ callback object
+    # (either through a CallbackN<A0, A1, ...> typedef, or explicitly), or
+    # something else that could be more useful to generate CPP docs ?
 
   def Class(self, parent_section, scope, obj):
     """Generates the code for a Class definition.
@@ -280,39 +187,26 @@ class JSHeaderGenerator(object):
       scope: the parent scope.
       obj: the Class definition.
     """
+    self.Documentation(parent_section, obj, '')
     section = self.GetSectionFromAttributes(parent_section, obj).CreateSection(
         obj.name)
-    id_prefix = js_utils.GetFullyQualifiedScopePrefix(scope)
-    if 'marshaled' in obj.attributes:
-      found = False
-      for member_defn in obj.defn_list:
-        if member_defn.name == 'marshaled':
-          if isinstance(member_defn, syntax_tree.Variable):
-            type_name = js_utils.GetFullyQualifiedTypeName(
-                member_defn.type_defn)
-            self.Documentation(section, obj, '@type {%s}' % type_name)
-            section.EmitCode('%s%s = goog.typedef;' % (id_prefix, obj.name))
-            found = True
-            break
-      if not found:
-        log.SourceError(obj.source,
-                        ('no marshaled function found for %s' % obj.name))
+    if obj.base_type:
+      bm = obj.base_type.binding_model
+      type_string = bm.JavaMemberString(scope, obj.base_type)
+      section.EmitCode('class %s : public %s {' % (obj.name, type_string))
     else:
-      extends = ''
-      if obj.base_type:
-        base = js_utils.GetFullyQualifiedTypeName(obj.base_type)
-        if base[0] == '!':
-          base = base[1:]
-        extends = '\n@extends {%s}' % base
-      self.Documentation(section, obj, '@constructor' + extends)
-      section.EmitCode('%s%s = function() { };' % (id_prefix, obj.name))
-
+      section.EmitCode('class %s {' % obj.name)
     public_section = section.CreateSection('public:')
     protected_section = section.CreateSection('protected:')
     private_section = section.CreateSection('private:')
     self.DefinitionList(section, obj, obj.defn_list)
-    # TODO(gman): Delete protected and private sections. Those docs
-    # are not needed for javascript.
+    if not public_section.IsEmpty():
+      public_section.AddPrefix('public:')
+    if not protected_section.IsEmpty():
+      protected_section.AddPrefix('protected:')
+    if not private_section.IsEmpty():
+      private_section.AddPrefix('private:')
+    section.EmitCode('};')
 
   def Namespace(self, parent_section, scope, obj):
     """Generates the code for a Namespace definition.
@@ -325,7 +219,11 @@ class JSHeaderGenerator(object):
       scope: the parent scope.
       obj: the Namespace definition.
     """
+    scope = scope  # silence gpylint.
+    self.Documentation(parent_section, obj, '')
+    parent_section.PushNamespace(obj.name)
     self.DefinitionList(parent_section, obj, obj.defn_list)
+    parent_section.PopNamespace()
 
   def Typename(self, parent_section, scope, obj):
     """Generates the code for a Typename definition.
@@ -349,23 +247,15 @@ class JSHeaderGenerator(object):
       scope: the parent scope.
       obj: the Enum definition.
     """
+    scope = scope  # silence gpylint.
     section = self.GetSectionFromAttributes(parent_section, obj)
-    type_string = 'number'
-    id_prefix = js_utils.GetFullyQualifiedScopePrefix(scope)
-    self.Documentation(parent_section, obj, '@enum {%s}' % type_string)
-    section.EmitCode('%s%s = {' % (id_prefix, obj.name))
-    count = 0
-    for ii in range(0, len(obj.values)):
-      value = obj.values[ii]
-      comma = ','
-      if ii == len(obj.values) - 1:
-        comma = ''
+    self.Documentation(parent_section, obj, '')
+    section.EmitCode('enum %s {' % obj.name)
+    for value in obj.values:
       if value.value is None:
-        section.EmitCode('%s: %d%s' % (value.name, count, comma))
+        section.EmitCode('%s,' % value.name)
       else:
-        section.EmitCode('%s: %s%s' % (value.name, value.value, comma))
-        count = int(value.value)
-      count += 1
+        section.EmitCode('%s = %s,' % (value.name, value.value))
     section.EmitCode('};')
 
   def DefinitionList(self, parent_section, scope, defn_list):
@@ -375,30 +265,12 @@ class JSHeaderGenerator(object):
       parent_section: the main section of the parent scope.
       scope: the parent scope.
       defn_list: the list of definitions.
-    Returns:
-      True if there was a '\returns' tag.
     """
-    # extract functions and merge functions of the same name and process all
-    # non-functions.
-    function_by_name = {}
     for obj in defn_list:
-      if 'nojs' in obj.attributes or 'nodocs' in obj.attributes:
+      if 'nojs' in obj.attributes:
         continue
-      if obj.defn_type == 'Function':
-        if obj.name in function_by_name:
-          function_by_name[obj.name].append(obj)
-        else:
-          function_by_name[obj.name] = [obj]
-      else:
-        func = getattr(self, obj.defn_type)
-        func(parent_section, scope, obj)
-
-    # process functions.
-    for func_array in function_by_name.values():
-      if len(func_array) == 1:
-        self.Function(parent_section, scope, func_array[0])
-      else:
-        self.OverloadedFunction(parent_section, scope, func_array)
+      func = getattr(self, obj.defn_type)
+      func(parent_section, scope, obj)
 
   def Documentation(self, parent_section, obj, extra_doc):
     """Generates the documentation code.
@@ -412,46 +284,21 @@ class JSHeaderGenerator(object):
     """
     try:
       section = self.GetSectionFromAttributes(parent_section, obj)
-      comment_lines = (obj.attributes['__docs'] + extra_doc).splitlines()
+      comment_lines = obj.attributes['__docs'].splitlines()
       # Break up text and insert comment formatting
-      section.EmitCode('/**')
-      # move all blank lines at start of docs.
-      while comment_lines and comment_lines[0].strip() == '':
-        comment_lines = comment_lines[1:]
-      # figure out how much whitespace is on first line and remove
-      # the same amount from all lines
-      start_index = 0
-      if comment_lines:
-        match = self._start_whitespace_re.search(comment_lines[0])
-        if match:
-          start_index = len(match.group(1))
-      flags = {'eat_lines': False};
-      found_returns = False
+      section.EmitCode('/*! ')
       for line in comment_lines:
-        if line[0:start_index].strip() == '':
-          line = line[start_index:]
-        if line.startswith('\\'):
-          flags['eat_lines'] = False
-        if self._return_re.match(line):
-          found_returns = True
-        line = self._param_re.sub(
-            lambda match: js_utils.GetParamSpec(obj, match.group(1)),
-            line)
-        line = self._return_re.sub(
-            lambda match: js_utils.GetReturnSpec(obj, flags) + ' ',
-            line)
-        line = self._code_re.sub('<pre>', line)
-        line = self._li_re.sub('<li>', line)
-        line = self._var_re.sub('', line)
-        line = self._sa_re.sub('@see', line)
-        line = self._endcode_re.sub('</pre>', line)
-        if not flags['eat_lines']:
-          section.EmitCode(' * %s' % (line))
-      section.EmitCode(' */')
-      return found_returns
+        section.EmitCode('%s' % (line))
+      section.EmitCode('%s' % (extra_doc))
+      section.EmitCode('*/')
 
     except KeyError:
-      log.SourceError(obj.source, 'Documentation not found')
+      # catch the error when __docs does not exist
+      if self.force_documentation:
+        source = obj.source
+        print ('%s:%d Documentation not found' % (source.file.source,
+                                                  source.line))
+        raise UndocumentedError('Documentation not found.')
 
   def FieldFunctionDocumentation(self, member_section, description,
                                  type_string, field_name):
@@ -478,15 +325,13 @@ class JSHeaderGenerator(object):
       defn_list: the list of top-level definitions.
 
     Returns:
-      a js_utils.JavascriptFileWriter that contains the javascript header file
-      code.
+      a cpp_utils.CppFileWriter that contains the C++ header file code.
 
     Raises:
       CircularDefinition: circular definitions were found in the file.
     """
-    filename = idl_file.basename + '.js'
-    writer = js_utils.JavascriptFileWriter('%s/%s' % (self._output_dir,
-                                                      filename), True)
+    writer = cpp_utils.CppFileWriter('%s/%s' % (self._output_dir,
+                                                idl_file.header), True)
     code_section = writer.CreateSection('defns')
     self.DefinitionList(code_section, namespace, defn_list)
     return writer
@@ -502,9 +347,9 @@ def ProcessFiles(output_dir, pairs, namespace):
     namespace: a syntax_tree.Namespace for the global namespace.
 
   Returns:
-    a list of js_utils.JavascriptFileWriter, one for each output header file.
+    a list of cpp_utils.CppFileWriter, one for each output header file.
   """
-  generator = JSHeaderGenerator(output_dir)
+  generator = CPPHeaderGenerator(output_dir)
   writer_list = []
   for (f, defn) in pairs:
     writer_list.append(generator.Generate(f, namespace, defn))

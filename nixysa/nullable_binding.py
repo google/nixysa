@@ -313,6 +313,23 @@ def CppGetStatic(scope, type_defn, field):
   return InvalidNullableUsage
 
 
+def JSDocTypeString(type_defn):
+  """Gets the representation of a type in JSDoc notation.
+
+  Args:
+    type_defn: a Definition for the type.
+
+  Returns:
+    a string that is the JSDoc notation of type_defn.
+  """
+  type_defn = type_defn.GetFinalType()
+  element_type_defn = type_defn.data_type.GetFinalType()
+  type = element_type_defn.binding_model.JSDocTypeString(element_type_defn)
+  if type[0] == '!':
+    type = type[1:]
+  return type
+
+
 def NpapiBindingGlueHeader(scope, type_defn):
   """Gets the NPAPI glue header for a given type.
 

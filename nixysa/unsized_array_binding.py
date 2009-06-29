@@ -318,6 +318,21 @@ def CppGetStatic(scope, type_defn, field):
   raise InvalidArrayUsage
 
 
+def JSDocTypeString(type_defn):
+  """Gets the representation of a type in JSDoc notation.
+
+  Args:
+    type_defn: a Definition for the type.
+
+  Returns:
+    a string that is the JSDoc notation of type_defn.
+  """
+  type_defn = type_defn.GetFinalType()
+  element_type_defn = type_defn.data_type.GetFinalType()
+  return ('!Array.<%s>' %
+          element_type_defn.binding_model.JSDocTypeString(element_type_defn))
+
+
 def NpapiBindingGlueHeader(scope, type_defn):
   """Gets the NPAPI glue header for a given type.
 
@@ -382,7 +397,7 @@ _from_npvariant_template = string.Template("""
 ${Type} ${variable};
 do {
   if (!NPVARIANT_IS_OBJECT(${input})) {
-    *error_handle = "Error in " ${context} 
+    *error_handle = "Error in " ${context}
         ": was expecting an array but got a non-object.";
     ${success} = false;
     break;
@@ -391,13 +406,13 @@ do {
   NPVariant value;
   if (!GetNPObjectProperty(${npp}, npobject, "length", &value)) {
     ${success} = false;
-    *error_handle = "Error in " ${context} 
+    *error_handle = "Error in " ${context}
         ": input had no valid length property.";
   }
   if (!NPVARIANT_IS_NUMBER(value)) {
     NPN_ReleaseVariantValue(&value);
     ${success} = false;
-    *error_handle = "Error in " ${context} 
+    *error_handle = "Error in " ${context}
         ": input had no valid numeric length property.";
     break;
   }

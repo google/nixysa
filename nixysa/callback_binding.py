@@ -320,6 +320,24 @@ def CppGetStatic(scope, type_defn, field):
   raise InvalidCallbackUsageError
 
 
+def JSDocTypeString(type_defn):
+  """Gets the representation of a type in JSDoc notation.
+
+  Args:
+    type_defn: a Definition for the type.
+
+  Returns:
+    a string that is the JSDoc notation of type_defn.
+  """
+  param_types = []
+  for param in type_defn.params:
+    param_binding_model = param.type_defn.binding_model
+    param_types.append(param_binding_model.JSDocTypeString(param.type_defn))
+  return_binding_model = type_defn.type_defn.binding_model
+  return_type = return_binding_model.JSDocTypeString(type_defn.type_defn)
+  return 'function(%s): %s' % (', '.join(param_types), return_type)
+
+
 def _MakeRunFunction(scope, type_defn):
   """Creates the Run function for the callback class.
 
@@ -454,7 +472,7 @@ _from_npvariant_template = string.Template("""
     ${variable} = ${namespace}::CreateObject(
        ${npp}, NPVARIANT_TO_OBJECT(${input_expr}));
   } else {
-    *error_handle = "Error in " ${context} 
+    *error_handle = "Error in " ${context}
         ": a callback must be a Javascript function.";
   }""")
 

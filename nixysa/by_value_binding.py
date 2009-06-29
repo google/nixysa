@@ -280,6 +280,21 @@ def CppGetStatic(scope, type_defn, field):
                        cpp_utils.GetGetterName(field))
 
 
+def JSDocTypeString(type_defn):
+  """Gets the representation of a type in JSDoc notation.
+
+  Args:
+    type_defn: a Definition for the type.
+
+  Returns:
+    a string that is the JSDoc notation of type_defn.
+  """
+  type_defn = type_defn.GetFinalType()
+  type_stack = type_defn.GetParentScopeStack()
+  name = type_defn.name
+  return '!' + '.'.join([s.name for s in type_stack[1:]] + [name])
+
+
 _binding_glue_header_template = string.Template("""
 class NPAPIObject: public NPObject {
   NPP npp_;

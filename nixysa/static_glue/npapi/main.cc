@@ -93,6 +93,9 @@ extern "C" {
         *v = obj;
         break;
       }
+      case NPPVpluginNeedsXEmbed:
+        *static_cast<NPBool *>(value) = true;
+        break;
       default:
         return NPERR_INVALID_PARAM;
         break;

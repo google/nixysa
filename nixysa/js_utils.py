@@ -25,6 +25,7 @@ import naming
 import gflags
 import log
 import cpp_utils
+import writer
 
 
 _doxygen_tag_re = re.compile(r'\s*\\(\w+) ')
@@ -661,11 +662,8 @@ class JavascriptFileWriter(object):
     This function writes the full contents to the file specified by the
     'filename' parameter at creation time.
     """
-    f = open(self._filename, 'w')
-    f.write('\n'.join(self.GetLines()))
-    f.write('\n')
-    f.close()
-    log.Info('Writing %s' % self._filename)
+    writer.WriteIfContentDifferent(self._filename,
+                                   '\n'.join(self.GetLines()) + '\n')
 
 
 def main():

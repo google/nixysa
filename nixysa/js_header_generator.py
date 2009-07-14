@@ -226,12 +226,13 @@ class JSHeaderGenerator(object):
             param['params'][0]['func'],
             param['params'][0]['param'].name)
       else:
-        union_strings = []
+        union_strings = set()
         for option in param['params']:
-          union_strings += [js_utils.GetFunctionParamType(
-              option['func'],
-              option['param'].name)]
-        param_string = '(' + '|'.join(union_strings) + ')'
+          union_strings.add(js_utils.GetFunctionParamType(option['func'],
+                                                          option['param'].name))
+        param_string = '|'.join(union_strings)
+        if len(union_strings) > 1:
+          param_string = '(' + param_string + ')'
       param_comments += ['@param {%s} %s %s' % (param_string, param['new_name'],
           param['docs'])]
 

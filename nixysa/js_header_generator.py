@@ -20,6 +20,7 @@ This module generates JSCompiler and JSDocToolkit file for a
 javascript documentation file from the parsed syntax tree.
 """
 
+import gflags
 import re
 import cpp_utils
 import js_utils
@@ -153,7 +154,10 @@ class JSHeaderGenerator(object):
     type_string = '\n@type {%s}' % js_utils.GetFullyQualifiedTypeName(
         obj.type_defn)
     self.Documentation(member_section, obj, extra + type_string)
-    member_section.EmitCode('%s%s%s;' % (id_prefix, proto, field_name))
+    undef = ''
+    if gflags.FLAGS['properties-equal-undefined'].value:
+      undef = ' = undefined'
+    member_section.EmitCode('%s%s%s%s;' % (id_prefix, proto, field_name, undef))
     # Note: There are no getter/setter in javascript
 
   def Function(self, parent_section, scope, obj):
@@ -353,7 +357,7 @@ class JSHeaderGenerator(object):
     section = self.GetSectionFromAttributes(parent_section, obj)
     type_string = 'number'
     id_prefix = js_utils.GetFullyQualifiedScopePrefix(scope)
-    self.Documentation(parent_section, obj, '@enum {%s}' % type_string)
+    self.Documentation(parent_section, obj, '\n@enum {%s}' % type_string)
     section.EmitCode('%s%s = {' % (id_prefix, obj.name))
     count = 0
     for ii in range(0, len(obj.values)):

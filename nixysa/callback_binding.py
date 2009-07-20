@@ -424,12 +424,20 @@ def NpapiBindingGlueCpp(scope, type_defn):
     a string, the glue implementation.
   """
   glue_class = type_defn.name + '_glue'
+
   run_function, unused_check = cpp_utils.GetFunctionPrototype(
       scope, _MakeRunFunction(scope, type_defn), glue_class + '::')
-  callback_glue = 'return RunCallback(npp_, npobject_'
+
+  if 'async' in type_defn.attributes:
+    async_param = 'true'
+  else:
+    async_param = 'false'
+
+  callback_glue = 'return RunCallback(npp_, npobject_, %s' % async_param
   if type_defn.params:
     callback_glue += ', '.join([''] + [t.name for t in type_defn.params])
   callback_glue += ')'
+
   return _npapi_binding_glue_cpp_template.substitute(
       GlueClass=glue_class,
       RunFunction=run_function,

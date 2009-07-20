@@ -255,3 +255,120 @@ ScopedId::ScopedId(NPIdentifier name) {
 ScopedId::~ScopedId() {
   NPN_MemFree(text_);
 }
+
+bool NPCallback::SupportsAsync() {
+  int plugin_major, plugin_minor, browser_major, browser_minor;
+  NPN_Version(&plugin_major, &plugin_minor, &browser_major, &browser_minor);
+  return browser_major > 0 ||
+      browser_minor >= NPVERS_HAS_PLUGIN_THREAD_ASYNC_CALL;
+}
+
+NPCallback* NPCallback::Create(NPP npp) {
+  return static_cast<NPCallback*>(NPN_CreateObject(npp,
+      const_cast<NPClass*>(&np_class_)));
+}
+
+void NPCallback::Set(NPObject* function, const NPVariant* args, int num_args) {
+  // Retain the new function.
+  if (function) {
+    NPN_RetainObject(function);
+  }
+
+  // Release the previous function.
+  if (function_) {
+    NPN_ReleaseObject(function_);
+  }
+
+  function_ = function;
+
+  // Copy new arguments and retain or copy their variants as necessary for the
+  // type.
+  std::vector<NPVariant> new_args(num_args);
+  for (size_t i = 0; i < new_args.size(); ++i) {
+    new_args[i] = args[i];
+    if (NPVARIANT_IS_OBJECT(new_args[i])) {
+      NPN_RetainObject(NPVARIANT_TO_OBJECT(new_args[i]));
+    } else if (NPVARIANT_IS_STRING(new_args[i])) {
+      NPUTF8* dest = static_cast<NPUTF8*>(
+          NPN_MemAlloc(new_args[i].value.stringValue.utf8length));
+      memcpy(dest, new_args[i].value.stringValue.utf8characters,
+             new_args[i].value.stringValue.utf8length);
+      new_args[i].value.stringValue.utf8characters = dest;
+    }
+  }
+
+  // Release previous argument variants.
+  for (size_t i = 0; i < args_.size(); ++i) {
+    NPN_ReleaseVariantValue(&args_[i]);
+  }
+
+  args_.swap(new_args);
+}
+
+namespace {
+void DoAsyncCall(void* data) {
+  NPCallback* call = static_cast<NPCallback*>(data);
+  NPVariant result;
+  if (call->Call(&result)) {
+    NPN_ReleaseVariantValue(&result);
+  }
+
+  // The call object was retained in NPCallback::Call. This releases it.
+  NPN_ReleaseObject(call);
+}
+}
+
+bool NPCallback::Call(NPVariant* result) {
+  if (!function_)
+    return false;
+
+  return NPN_InvokeDefault(npp_, function_,
+                           args_.size() == 0 ? NULL : &args_[0],
+                           args_.size(),
+                           result);
+}
+
+bool NPCallback::CallAsync() {
+  if (!function_)
+    return false;
+
+  if (!SupportsAsync())
+    return false;
+
+  // Extend the reference count until async call completes.
+  NPN_RetainObject(this);
+
+  NPN_PluginThreadAsyncCall(npp_, DoAsyncCall, this);
+  return true;
+}
+
+NPCallback::NPCallback(NPP npp)
+    : npp_(npp),
+      function_(NULL) {
+}
+
+NPCallback::~NPCallback() {
+  Set(NULL, NULL, 0);
+}
+
+NPObject* NPCallback::Allocate(NPP npp, NPClass* the_class) {
+  NPCallback* call = new NPCallback(npp);
+  return call;
+}
+
+void NPCallback::Deallocate(NPObject* object) {
+  delete static_cast<NPCallback*>(object);
+}
+
+void NPCallback::Invalidate(NPObject* object) {
+  NPCallback* call = static_cast<NPCallback*>(object);
+  call->function_ = NULL;
+  call->args_.clear();
+}
+
+const NPClass NPCallback::np_class_ = {
+  NP_CLASS_STRUCT_VERSION,
+  NPCallback::Allocate,
+  NPCallback::Deallocate,
+  NPCallback::Invalidate
+};

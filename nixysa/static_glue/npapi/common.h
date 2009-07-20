@@ -18,6 +18,7 @@
 #include <npapi.h>
 #include <npruntime.h>
 #include <string>
+#include <vector>
 
 
 #define NPVARIANT_TO_NUMBER(_v)  (NPVARIANT_IS_INT32(_v) ? \
@@ -130,6 +131,44 @@ class Variant {
     else
       return AsFloat();
   }
+};
+
+// An object that holds a callable NPObject and some arguments and allows the
+// callable object to be called with those arguments either synchronously or
+// asynchronously.
+class NPCallback : public NPObject {
+ public:
+  // Returns whether asynchronous calls are supported by the browser.
+  static bool SupportsAsync();
+
+  // Create a new NPCallback.
+  static NPCallback* Create(NPP npp);
+
+  // Set the function and arguments.
+  void Set(NPObject* function, const NPVariant* args, int num_args);
+
+  // Call synchronously.
+  bool Call(NPVariant* result);
+
+  // Call asynchronously.
+  bool CallAsync();
+
+ private:
+  explicit NPCallback(NPP npp);
+  ~NPCallback();
+
+  // Disallow copy constructor and assignment operator.
+  // These are deliberately unimplemented.
+  NPCallback(const NPCallback&);
+  void operator=(const NPCallback&);
+
+  static NPObject* Allocate(NPP npp, NPClass* the_class);
+  static void Deallocate(NPObject* object);
+  static void Invalidate(NPObject* object);
+  const static NPClass np_class_;
+  NPP npp_;
+  NPObject* function_;
+  std::vector<NPVariant> args_;
 };
 
 namespace glue {

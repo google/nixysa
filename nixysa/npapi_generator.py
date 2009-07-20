@@ -829,17 +829,29 @@ ${StartException}
   ${ParamsToVariantsPre}
   if (success) {
     ${ParamsToVariantsPost}
-    GLUE_PROFILE_START(npp, "invokeDefault");
-    success = NPN_InvokeDefault(npp,
-                                npobject,
-                                args,
-                                ${ArgCount},
-                                &result);
-    GLUE_PROFILE_STOP(npp, "invokeDefault");
-    if (success) {
-      GLUE_PROFILE_START(npp, "NPN_ReleaseVariantValue");
-      NPN_ReleaseVariantValue(&result);
-      GLUE_PROFILE_STOP(npp, "NPN_ReleaseVariantValue");
+    if (async && NPCallback::SupportsAsync()) {
+      NPCallback* callback = NPCallback::Create(npp);
+      if (callback) {
+        callback->Set(npobject, args, ${ArgCount});
+        callback->CallAsync();
+        NPN_ReleaseObject(callback);
+        success = true;
+      } else {
+        success = false;
+      }
+    } else {
+      GLUE_PROFILE_START(npp, "invokeDefault");
+      success = NPN_InvokeDefault(npp,
+                                  npobject,
+                                  args,
+                                  ${ArgCount},
+                                  &result);
+      GLUE_PROFILE_STOP(npp, "invokeDefault");
+      if (success) {
+        GLUE_PROFILE_START(npp, "NPN_ReleaseVariantValue");
+        NPN_ReleaseVariantValue(&result);
+        GLUE_PROFILE_STOP(npp, "NPN_ReleaseVariantValue");
+      }
     }
   }
   for (int i = 0; i != ${ArgCount}; ++i) {
@@ -860,17 +872,29 @@ ${StartException}
   NPVariant result;
   NULL_TO_NPVARIANT(result);
   if (success) {
-    GLUE_PROFILE_START(npp, "invokeDefault");
-    success = NPN_InvokeDefault(npp,
-                                npobject,
-                                NULL,
-                                0,
-                                &result);
-    GLUE_PROFILE_STOP(npp, "invokeDefault");
-    if (success) {
-      GLUE_PROFILE_START(npp, "NPN_ReleaseVariantValue");
-      NPN_ReleaseVariantValue(&result);
-      GLUE_PROFILE_STOP(npp, "NPN_ReleaseVariantValue");
+    if (async && NPCallback::SupportsAsync()) {
+      NPCallback* callback = NPCallback::Create(npp);
+      if (callback) {
+        callback->Set(npobject, NULL, 0);
+        callback->CallAsync();
+        NPN_ReleaseObject(callback);
+        success = true;
+      } else {
+        success = false;
+      }  
+    } else {
+      GLUE_PROFILE_START(npp, "invokeDefault");
+      success = NPN_InvokeDefault(npp,
+                                  npobject,
+                                  NULL,
+                                  0,
+                                  &result);
+      GLUE_PROFILE_STOP(npp, "invokeDefault");
+      if (success) {
+        GLUE_PROFILE_START(npp, "NPN_ReleaseVariantValue");
+        NPN_ReleaseVariantValue(&result);
+        GLUE_PROFILE_STOP(npp, "NPN_ReleaseVariantValue");
+      }
     }
   }
   ${ReturnEval}
@@ -1816,8 +1840,8 @@ class NpapiGenerator(object):
     bm = return_type.binding_model
     return_type_string, unused_val = bm.CppReturnValueString(scope,
                                                              return_type)
-    run_callback = ('%s RunCallback(NPP npp, NPObject *npobject%s)' %
-                    (return_type_string, ', '.join(param_strings)))
+    run_callback = ('%s RunCallback(NPP npp, NPObject *npobject, bool async%s)'
+                    % (return_type_string, ', '.join(param_strings)))
 
     return_eval, return_value = bm.NpapiFromNPVariant(scope, return_type,
                                                       'result', 'retval',

@@ -43,6 +43,7 @@ CPP_POD_TO_JSDOC_TYPES = {
   'std.string' : 'string',
   'bool' : 'boolean',
   'float' : 'number',
+  'double' : 'number',
   'unsigned int' : 'number',
   'size_t' : 'number',
   'void' : 'void'};  # void is a special case. It's used for callbacks
@@ -465,10 +466,10 @@ if (NPVARIANT_IS_STRING(${input})) {
 _float_from_npvariant_template = string.Template("""
     ${type} ${variable} = 0.f;
     if (NPVARIANT_IS_NUMBER(${input})) {
-      ${variable} = static_cast<float>(NPVARIANT_TO_NUMBER(${input}));
+      ${variable} = static_cast<${type}>(NPVARIANT_TO_NUMBER(${input}));
     } else {
       *error_handle = "Error in " ${context}
-          ": was expecting a float.";
+          ": was expecting a number.";
       ${success} = false;
     }
 """)

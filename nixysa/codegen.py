@@ -122,6 +122,7 @@ def GetNativeTypes():
           NativeType(source, pod_attributes, 'size_t', 'int'),
           NativeType(source, pod_attributes, 'bool', 'bool'),
           NativeType(source, pod_attributes, 'float', 'float'),
+          NativeType(source, pod_attributes, 'double', 'float'),
           NativeType(source, pod_attributes, 'Variant', 'variant'),
           GetStdNamespace()]
 

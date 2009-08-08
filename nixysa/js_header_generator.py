@@ -181,7 +181,8 @@ class JSHeaderGenerator(object):
     else:
       # there was no return statement so the return type better be void
       if (not return_type == 'void') and (not return_type == '**not defined**'):
-        log.SourceError('return missing for non void function: %s' % obj.name)
+        log.SourceError(obj.source, 
+                        'return missing for non void function: %s' % obj.name)
     prototype = js_utils.GetFunctionPrototype(scope, obj, True)
     section.EmitCode(prototype)
 

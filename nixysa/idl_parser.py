@@ -521,8 +521,12 @@ class Parser(object):
 
   def p_error(self, p):
     location = self._GetLocation()
-    print ('%s:%d: Syntax error - unexpected token %s(%s)' %
-           (location.file.source, location.line, p.type, p.value))
+    if p is None:
+      print ('%s:%d: Syntax error - unexpected end of file' %
+             (location.file.source, location.line))
+    else:
+      print ('%s:%d: Syntax error - unexpected token %s(%s)' %
+             (location.file.source, location.line, p.type, p.value))
 
   def Parse(self, idl_file):
     """Parses an IDL file.

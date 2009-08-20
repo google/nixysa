@@ -1,0 +1,20 @@
+<html>
+<head>
+<script type="text/javascript">
+
+function init() {
+  var plugin = document.getElementById("plugin");
+  var hw = plugin.HelloWorld();
+  if (!hw) {
+    alert("no plugin");
+  }
+
+  alert(hw.getHw());
+}
+</script>
+</head>
+
+<body onload="init()">
+<object type="application/HelloWorld" id="plugin" width="0" height="0"> </object>
+</body>
+</html>

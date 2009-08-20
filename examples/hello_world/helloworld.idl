@@ -1,0 +1,5 @@
+[binding_model=by_value, include="helloworld.h"] class HelloWorld {
+  HelloWorld();
+  std::string GetHw();
+};
+

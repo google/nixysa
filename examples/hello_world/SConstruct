@@ -31,6 +31,11 @@ env.Append(ENV={'PYTHON': sys.executable})
 if sys.platform == 'win32':
   env.Append(CODEGEN = 'codegen.bat',
              CPPDEFINES = ['WIN32', 'OS_WINDOWS'])
+elif sys.platform == 'darwin':
+  env.Append(CODEGEN = 'codegen.sh',
+             CPPDEFINES = ['XP_MACOSX', 'OS_MACOSX'],
+             LINKFLAGS = '-framework CoreFoundation -framework IOKit')
+
 else:
   env.Append(CODEGEN = 'codegen.sh',
              CPPDEFINES = ['OS_LINUX'])

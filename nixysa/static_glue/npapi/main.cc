@@ -48,7 +48,7 @@ extern "C" {
     return NPERR_NO_ERROR;
   }
 
-#ifdef OS_WINDOWS
+#if defined(OS_WINDOWS) || defined(OS_MACOSX)
   NPError OSCALL NP_Initialize(NPNetscapeFuncs *browserFuncs) {
     return InitializeNPNApi(browserFuncs);
   }

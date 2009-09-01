@@ -334,6 +334,9 @@ static void Deallocate(NPObject *header) {
 }
 
 NPAPIObject *GetNPObject(NPP npp, ${Class} *object) {
+  if (!object)
+    return NULL;
+
   NPAPIObject *npobject = static_cast<NPAPIObject *>(
       NPN_CreateObject(npp, &npclass));
   npobject->set_value(object);
@@ -439,7 +442,8 @@ def NpapiFromNPVariant(scope, type_defn, input_expr, variable, success,
   text = _from_npvariant_template.substitute(ClassGlueNS=glue_namespace,
                                              variable=variable,
                                              input=input_expr,
-                                             success=success)
+                                             success=success,
+                                             context=exception_context)
   return (text, '%s->value()' % variable)
 
 

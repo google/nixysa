@@ -296,7 +296,7 @@ class JSHeaderGenerator(object):
           if isinstance(member_defn, syntax_tree.Variable):
             type_name = js_utils.GetFullyQualifiedTypeName(
                 member_defn.type_defn)
-            self.Documentation(section, obj, '@type {%s}' % type_name)
+            self.Documentation(section, obj, '\n@type {%s}' % type_name)
             section.EmitCode('%s%s = goog.typedef;' % (id_prefix, obj.name))
             found = True
             break
@@ -310,7 +310,7 @@ class JSHeaderGenerator(object):
         if base[0] == '!':
           base = base[1:]
         extends = '\n@extends {%s}' % base
-      self.Documentation(section, obj, '@constructor' + extends)
+      self.Documentation(section, obj, '\n@constructor' + extends)
       section.EmitCode('%s%s = function() { };' % (id_prefix, obj.name))
 
     public_section = section.CreateSection('public:')

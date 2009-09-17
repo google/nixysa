@@ -31,8 +31,9 @@ import gflags
 
 # local imports
 import idl_parser
-import syntax_tree
+import locking
 import log
+import syntax_tree
 
 # default supported generators
 import header_generator
@@ -75,6 +76,9 @@ gflags.DEFINE_multistring('generator-module', [], 'include a generator module.'
 
 gflags.DEFINE_multistring('generate', [], 'the generator to use')
 gflags.DEFINE_string('output-dir', '.', 'the output directory')
+
+gflags.DEFINE_boolean('exclusive-lock', False, 'Use file locking to make sure'
+                      ' there is only one instance running at a time.')
 gflags.DEFINE_boolean('force', False, 'force generation even if the source'
                       ' files have not changed')
 gflags.DEFINE_boolean('force-docs', False, 'force all members to have'
@@ -168,14 +172,28 @@ def main(argv):
   hash_value = md5_hash.hexdigest()
   if not FLAGS.force:
     try:
-      hash_file = open(hash_filename)
-      if hash_value == hash_file.read():
+      hash_file = open(hash_filename, 'r')
+      # Don't read while others are writing...
+      if FLAGS['exclusive-lock']:
+        locking.lockf(hash_file, locking.LOCK_SH)
+
+      old_hash = hash_file.read()
+
+      if FLAGS['exclusive-lock']:
+        locking.lockf(hash_file, locking.LOCK_UN)
+      hash_file.close()
+
+      if hash_value == old_hash:
         print "Source files haven't changed: nothing to generate."
         return
-      hash_file.close()
     except IOError:
-      # could not load the hash file
+      # Could not load the hash file, so there must be stuff to
+      # generate.
       pass
+
+  hash_file = open(hash_filename, 'w')
+  if FLAGS['exclusive-lock']:
+    locking.lockf(hash_file, locking.LOCK_EX)
 
   my_parser = idl_parser.Parser(output_dir)
   pairs = []
@@ -198,9 +216,10 @@ def main(argv):
   for writer in writer_list:
     writer.Write()
 
-  # save hash for next time
-  hash_file = open(hash_filename, 'w')
+  # Save hash for next time
   hash_file.write(hash_value)
+  if FLAGS['exclusive-lock']:
+    locking.lockf(hash_file, locking.LOCK_UN)
   hash_file.close()
   log.FailIfHaveErrors()
 

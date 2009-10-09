@@ -385,7 +385,7 @@ typedef enum {
 #endif
   , NPNVsupportsCoreGraphicsBool = 2001
   , NPNVsupportsOpenGLBool = 2002
-
+  , NPNVsupportsCoreAnimationBool = 2003
   // added by Google - maf
   /* TRUE if the browser supports the Carbon event model */
   , NPNVsupportsCarbonBool = 3000

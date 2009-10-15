@@ -174,12 +174,12 @@ def main(argv):
     try:
       hash_file = open(hash_filename, 'r')
       # Don't read while others are writing...
-      if FLAGS['exclusive-lock']:
+      if FLAGS['exclusive-lock'].value:
         locking.lockf(hash_file, locking.LOCK_SH)
 
       old_hash = hash_file.read()
 
-      if FLAGS['exclusive-lock']:
+      if FLAGS['exclusive-lock'].value:
         locking.lockf(hash_file, locking.LOCK_UN)
       hash_file.close()
 
@@ -192,7 +192,7 @@ def main(argv):
       pass
 
   hash_file = open(hash_filename, 'w')
-  if FLAGS['exclusive-lock']:
+  if FLAGS['exclusive-lock'].value:
     locking.lockf(hash_file, locking.LOCK_EX)
 
   my_parser = idl_parser.Parser(output_dir)
@@ -218,7 +218,7 @@ def main(argv):
 
   # Save hash for next time
   hash_file.write(hash_value)
-  if FLAGS['exclusive-lock']:
+  if FLAGS['exclusive-lock'].value:
     locking.lockf(hash_file, locking.LOCK_UN)
   hash_file.close()
   log.FailIfHaveErrors()

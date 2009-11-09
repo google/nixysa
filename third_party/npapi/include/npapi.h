@@ -65,6 +65,9 @@
 #else
 #include <Carbon/Carbon.h>
 #endif
+/* Begin Google addition */
+#include <OpenGL/OpenGL.h>
+/* End Google addition */
 #endif
 
 #if defined(XP_UNIX) 

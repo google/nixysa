@@ -15,7 +15,7 @@
 #ifndef TOOLS_IDLGLUE_NG_STATIC_GLUE_NPAPI_NPN_API_H_
 #define TOOLS_IDLGLUE_NG_STATIC_GLUE_NPAPI_NPN_API_H_
 
-#include <npupp.h>
+#include <npfunctions.h>
 
 // Initializes the NPN API, by copying the browser functions given by the
 // browser.

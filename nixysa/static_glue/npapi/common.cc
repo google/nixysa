@@ -230,8 +230,8 @@ NPObject *CreateArray(NPP npp) {
   NPN_GetValue(npp, NPNVWindowNPObject, &global_object);
   GLUE_PROFILE_STOP(npp, "getvalue");
   NPString string;
-  string.utf8characters = "[]";
-  string.utf8length = strlen(string.utf8characters);
+  string.UTF8Characters = "[]";
+  string.UTF8Length = strlen(string.UTF8Characters);
   NPVariant result;
   GLUE_PROFILE_START(npp, "evaluate");
   bool temp = NPN_Evaluate(npp, global_object, &string, &result);
@@ -290,10 +290,10 @@ void NPCallback::Set(NPObject* function, const NPVariant* args, int num_args) {
       NPN_RetainObject(NPVARIANT_TO_OBJECT(new_args[i]));
     } else if (NPVARIANT_IS_STRING(new_args[i])) {
       NPUTF8* dest = static_cast<NPUTF8*>(
-          NPN_MemAlloc(new_args[i].value.stringValue.utf8length));
-      memcpy(dest, new_args[i].value.stringValue.utf8characters,
-             new_args[i].value.stringValue.utf8length);
-      new_args[i].value.stringValue.utf8characters = dest;
+          NPN_MemAlloc(new_args[i].value.stringValue.UTF8Length));
+      memcpy(dest, new_args[i].value.stringValue.UTF8Characters,
+             new_args[i].value.stringValue.UTF8Length);
+      new_args[i].value.stringValue.UTF8Characters = dest;
     }
   }
 

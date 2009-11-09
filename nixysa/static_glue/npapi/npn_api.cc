@@ -18,7 +18,7 @@
 // initialization entrypoint. This file contains the glue between the NPN
 // functions and the browser functions.
 
-#include <npupp.h>
+#include <npfunctions.h>
 #include <stdlib.h>
 #include <string.h>
 #include <algorithm>

@@ -442,8 +442,8 @@ if (!NPVARIANT_IS_STRING(${input}) {
   ${success} = false;
   *error_handle = "Error in " ${context}
       ": was expecting a string.";
-} else if (!UTF8ToString16(NPVARIANT_TO_STRING(${input}).utf8characters,
-                    NPVARIANT_TO_STRING(${input}).utf8length,
+} else if (!UTF8ToString16(NPVARIANT_TO_STRING(${input}).UTF8Characters,
+                    NPVARIANT_TO_STRING(${input}).UTF8Length,
                     &${variable})) {
   ${success} = false;
   *error_handle = "Error in " ${context}
@@ -454,8 +454,8 @@ if (!NPVARIANT_IS_STRING(${input}) {
 _string_from_npvariant_template = string.Template("""
 ${type} ${variable};
 if (NPVARIANT_IS_STRING(${input})) {
-  ${variable} = ${type}(NPVARIANT_TO_STRING(${input}).utf8characters,
-                        NPVARIANT_TO_STRING(${input}).utf8length);
+  ${variable} = ${type}(NPVARIANT_TO_STRING(${input}).UTF8Characters,
+                        NPVARIANT_TO_STRING(${input}).UTF8Length);
 } else {
   ${success} = false;
   *error_handle = "Error in " ${context}

@@ -389,10 +389,6 @@ typedef enum {
   , NPNVsupportsOpenGLBool = 2002
   , NPNVsupportsCoreAnimationBool = 2003
   // added by Google - maf
-  /* TRUE if the browser supports the Carbon event model */
-  , NPNVsupportsCarbonBool = 3000
-  /* TRUE if the browser supports the Cocoa event model */
-  , NPNVsupportsCocoaBool = 3001
   , NPNVbrowserTextInputFuncs = 1002 /* The browser text input vtable */
   // end of Google additions
 } NPNVariable;

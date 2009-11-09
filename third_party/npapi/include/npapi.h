@@ -247,6 +247,10 @@ typedef enum {
   NPDrawingModelQuickDraw = 0,
 #endif
   NPDrawingModelCoreGraphics = 1
+/* Begin Google addition */
+  , NPDrawingModelOpenGL = 2
+  , NPDrawingModelCoreAnimation = 3
+/* End Google addition */
 } NPDrawingModel;
 
 typedef enum {
@@ -545,6 +549,14 @@ typedef struct NP_CGContext
   void *window; /* A WindowRef or NULL for the Cocoa event model. */
 #endif
 } NP_CGContext;
+
+/* Begin Google addition */
+typedef struct NP_GLContext
+{
+    CGLContextObj context;
+    WindowRef window;
+} NP_GLContext;
+/* End Google addition */
 
 typedef enum {
   NPCocoaEventDrawRect = 1,

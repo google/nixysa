@@ -181,7 +181,7 @@ class JSHeaderGenerator(object):
     else:
       # there was no return statement so the return type better be void
       if (not return_type == 'void') and (not return_type == '**not defined**'):
-        log.SourceError(obj.source, 
+        log.SourceError(obj.source,
                         'return missing for non void function: %s' % obj.name)
     prototype = js_utils.GetFunctionPrototype(scope, obj, True)
     section.EmitCode(prototype)
@@ -194,6 +194,16 @@ class JSHeaderGenerator(object):
       scope: the parent scope.
       func_array: an array of function definition objects.
     """
+    if gflags.FLAGS['overloaded-function-docs'].value:
+      count = 0
+      for func in func_array:
+        old_name = func.name
+        func.name = "%sxxxOVERLOADED%dxxx" % (old_name, count)
+        self.Function(parent_section, scope, func)
+        func.name = old_name
+        count += 1
+      return
+
     # merge the params.
     params = []
     min_params = len(func_array[0].params)

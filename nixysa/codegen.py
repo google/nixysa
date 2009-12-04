@@ -85,6 +85,8 @@ gflags.DEFINE_boolean('force-docs', False, 'force all members to have'
                       ' documentation blocks or else raise an exception.')
 gflags.DEFINE_boolean('no-return-docs', False, 'remove docs marked as'
                       ' noreturndocs.')
+gflags.DEFINE_boolean('overloaded-function-docs', False,
+                      'generate special overloaded function docs.')
 gflags.DEFINE_boolean('properties-equal-undefined', False,
                       'Emit class.prototype.property = undefined;')
 

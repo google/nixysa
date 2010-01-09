@@ -299,7 +299,7 @@ class JSHeaderGenerator(object):
     section = self.GetSectionFromAttributes(parent_section, obj).CreateSection(
         obj.name)
     id_prefix = js_utils.GetFullyQualifiedScopePrefix(scope)
-    if 'marshaled' in obj.attributes:
+    if 'marshaled' in obj.attributes and not ('no_marshaled_docs' in obj.attributes):
       found = False
       for member_defn in obj.defn_list:
         if member_defn.name == 'marshaled':

@@ -200,22 +200,74 @@ bool GetNPObjectProperty(NPP npp, NPObject *object, const char *name,
   return result;
 }
 
+
+// Helper for privateIntToDecimal below.
+static void PrivateSwapChars(char *a, char *b) {
+  char temp = *a;
+  *a = *b;
+  *b = temp;
+}
+
+
+// Helper for GetNPArrayProperty below.
+// Write out an int as a decimal string.
+static void PrivateIntToDecimal(int int_in, char *string_out) {
+  bool neg = int_in < 0;
+  int i = neg ? -int_in : int_in; // Var i = absolute value of int_in.
+
+  // Vast majority of calls are for 1 digit positive integers.
+  if((!neg) && (i < 10)) {
+    string_out[0] = '0' + i;
+    string_out[1] = '\0';
+  } else {
+    // All other values.
+    char *o = string_out;
+
+    // Write string backwards - each digit starting with the smallest.
+    do {
+      *o++ = '0' + (i % 10);
+      i /= 10;
+    } while (i);
+
+    // Write minus sign if negative.
+    if (neg)
+      *o++ = '-';
+
+    // Terminate and point o at last char of number.
+    *o-- = '\0';
+
+    // Reverse the chars in the backwards string and we're done.
+    // This swaps each char into place, but leaves the 0 terminator where it is.
+    // A 2 or 3 digit number would only require one swap, a 4 or 5 digit numnber
+    // would require 2, etc.
+    while(string_out < o)
+      PrivateSwapChars(string_out++, o--);
+  }
+}
+
+
 bool GetNPArrayProperty(NPP npp, NPObject *object, int index,
                         NPVariant *output) {
-  GLUE_PROFILE_START(npp, "NPN_GetIntIdentifier");
-  NPIdentifier identifier = NPN_GetIntIdentifier(index);
-  GLUE_PROFILE_STOP(npp, "NPN_GetIntIdentifier");
-  // Safari doesn't implement NPN_HasProperty, the work-around is too slow for
-  // big arrays, so don't check for the existence of int properties - the user
-  // may get unexpected error messages, but what can we do.
+  // Some newer versions of Safari crash or fail when accessing array elements
+  // with an int identifer rather than a string identifier,
+  // ie Safari wants "2" not 2.
+  // As all browsers accept the string version, just use that.
+  char num_str[32];
+  PrivateIntToDecimal(index, num_str);
+  GLUE_PROFILE_START(npp, "NPN_GetStringIdentifier");
+  NPIdentifier string_identifier = NPN_GetStringIdentifier(num_str);
+  GLUE_PROFILE_STOP(npp, "NPN_GetStringIdentifier");
+  // Old versions of Safari don't implement NPN_HasProperty, the work-around is
+  // too slow for big arrays, so don't check for the existence of int properties
+  // - the user may get unexpected error messages, but what can we do.
   if (!IsHasPropertyWorkaround()) {
     GLUE_PROFILE_START(npp, "NPN_HasProperty");
-    bool result = NPN_HasProperty(npp, object, identifier);
+    bool result = NPN_HasProperty(npp, object, string_identifier);
     GLUE_PROFILE_STOP(npp, "NPN_HasProperty");
     if (!result) return false;
   }
   GLUE_PROFILE_START(npp, "NPN_GetProperty");
-  bool result = NPN_GetProperty(npp, object, identifier, output);
+  bool result = NPN_GetProperty(npp, object, string_identifier, output);
   GLUE_PROFILE_STOP(npp, "NPN_GetProperty");
   return result;
 }

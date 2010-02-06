@@ -23,7 +23,7 @@ To use:
 
 import glob
 import imp
-import md5
+import hashlib
 import os
 import sys
 
@@ -151,7 +151,7 @@ def main(argv):
   files = argv[1:]
   # generate a hash of all the inputs to figure out if we need to re-generate
   # the outputs.
-  md5_hash = md5.new()
+  md5_hash = hashlib.md5()
   # hash the input files and the source python files (globbing *.py in the
   # directory of this file)
   for source_file in files + glob.glob(os.path.join(os.path.dirname(__file__),

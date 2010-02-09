@@ -23,7 +23,11 @@ To use:
 
 import glob
 import imp
-import hashlib
+# Use hashlib if present (Python 2.5 and up), otherwise fall back to md5.
+try:
+  import hashlib
+except ImportError:
+  import md5
 import os
 import sys
 
@@ -151,7 +155,11 @@ def main(argv):
   files = argv[1:]
   # generate a hash of all the inputs to figure out if we need to re-generate
   # the outputs.
-  md5_hash = hashlib.md5()
+  # Use hashlib if present (Python 2.5 and up), otherwise fall back to md5.
+  if globals().has_key('hashlib'):
+    md5_hash = hashlib.md5()
+  else:
+    md5_hash = md5.new();
   # hash the input files and the source python files (globbing *.py in the
   # directory of this file)
   for source_file in files + glob.glob(os.path.join(os.path.dirname(__file__),

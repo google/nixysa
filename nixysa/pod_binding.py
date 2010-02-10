@@ -438,7 +438,7 @@ def NpapiDispatchFunctionHeader(scope, type_defn, variable, npp, success):
 
 _wstring_from_npvariant_template = string.Template("""
 ${type} ${variable};
-if (!NPVARIANT_IS_STRING(${input}) {
+if (!NPVARIANT_IS_STRING(${input})) {
   ${success} = false;
   *error_handle = "Error in " ${context}
       ": was expecting a string.";

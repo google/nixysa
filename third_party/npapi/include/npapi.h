@@ -343,6 +343,9 @@ typedef enum {
   , NPPVpluginDrawingModel = 1000
   /* Used for negotiating event models */
   , NPPVpluginEventModel = 1001
+  /* In the NPDrawingModelCoreAnimation drawing model, the browser asks the 
+     plug-in for a Core Animation layer. */
+  , NPPVpluginCoreAnimationLayer = 1003
 #endif
 
 #ifdef MOZ_PLATFORM_HILDON

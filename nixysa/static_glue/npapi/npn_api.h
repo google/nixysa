@@ -39,4 +39,9 @@ NPError InitializeNPNApi(NPNetscapeFuncs *functions);
 // NPN_HasProperty if possible).
 bool IsHasPropertyWorkaround();
 
+// Checks whether NPN_PluginThreadAsyncCall is implemented correctly.
+// Safari 4 on Mac OS X claims it is supported, but provides a NULL
+// function pointer for it.
+bool IsPluginThreadAsyncCallSupported();
+
 #endif  // TOOLS_IDLGLUE_NG_STATIC_GLUE_NPAPI_NPN_API_H_

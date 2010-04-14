@@ -60,6 +60,14 @@ bool IsHasPropertyWorkaround() {
   return g_browser_functions.hasproperty == HasPropertyWorkaround;
 }
 
+bool IsPluginThreadAsyncCallSupported() {
+  return (GetMinorVersion(g_browser_functions.version) >=
+          NPVERS_HAS_PLUGIN_THREAD_ASYNC_CALL) &&
+          g_browser_functions.pluginthreadasynccall != NULL;
+}
+
+
+
 NPError InitializeNPNApi(NPNetscapeFuncs *funcs) {
   if (!funcs)
     return NPERR_INVALID_FUNCTABLE_ERROR;
@@ -243,6 +251,11 @@ void NP_LOADDS NPN_PluginThreadAsyncCall(NPP instance,
   if (GetMinorVersion(g_browser_functions.version) <
       NPVERS_HAS_PLUGIN_THREAD_ASYNC_CALL)
     return;
+  // NOTE: Safari 4 on Mac OS X claims to support
+  // NPN_PluginThreadAsyncCall but supplies us a NULL function
+  // pointer. Callers of this entry point are responsible for using
+  // IsPluginThreadAsyncCallSupported() to determine whether it's
+  // "really" present.
   g_browser_functions.pluginthreadasynccall(instance, func, user_data);
 }
 

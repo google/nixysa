@@ -829,7 +829,7 @@ ${StartException}
   ${ParamsToVariantsPre}
   if (success) {
     ${ParamsToVariantsPost}
-    if (async && NPCallback::SupportsAsync()) {
+    if (async && NPCallback::SupportsAsync(npp)) {
       NPCallback* callback = NPCallback::Create(npp);
       if (callback) {
         callback->Set(npobject, args, ${ArgCount});
@@ -872,7 +872,7 @@ ${StartException}
   NPVariant result;
   NULL_TO_NPVARIANT(result);
   if (success) {
-    if (async && NPCallback::SupportsAsync()) {
+    if (async && NPCallback::SupportsAsync(npp)) {
       NPCallback* callback = NPCallback::Create(npp);
       if (callback) {
         callback->Set(npobject, NULL, 0);

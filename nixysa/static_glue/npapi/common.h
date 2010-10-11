@@ -139,7 +139,7 @@ class Variant {
 class NPCallback : public NPObject {
  public:
   // Returns whether asynchronous calls are supported by the browser.
-  static bool SupportsAsync();
+  static bool SupportsAsync(NPP npp);
 
   // Create a new NPCallback.
   static NPCallback* Create(NPP npp);

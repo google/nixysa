@@ -41,7 +41,8 @@ bool IsHasPropertyWorkaround();
 
 // Checks whether NPN_PluginThreadAsyncCall is implemented correctly.
 // Safari 4 on Mac OS X claims it is supported, but provides a NULL
-// function pointer for it.
-bool IsPluginThreadAsyncCallSupported();
+// function pointer for it. Even worse, Safari 5 on Mac OS X does not even
+// initialize the function pointer.
+bool IsPluginThreadAsyncCallSupported(NPP instance);
 
 #endif  // TOOLS_IDLGLUE_NG_STATIC_GLUE_NPAPI_NPN_API_H_

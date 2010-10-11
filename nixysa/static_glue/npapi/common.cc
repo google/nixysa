@@ -308,8 +308,8 @@ ScopedId::~ScopedId() {
   NPN_MemFree(text_);
 }
 
-bool NPCallback::SupportsAsync() {
-  return IsPluginThreadAsyncCallSupported();
+bool NPCallback::SupportsAsync(NPP instance) {
+  return IsPluginThreadAsyncCallSupported(instance);
 }
 
 NPCallback* NPCallback::Create(NPP npp) {
@@ -381,7 +381,7 @@ bool NPCallback::CallAsync() {
   if (!function_)
     return false;
 
-  if (!SupportsAsync())
+  if (!SupportsAsync(npp_))
     return false;
 
   // Extend the reference count until async call completes.

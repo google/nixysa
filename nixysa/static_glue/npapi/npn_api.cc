@@ -72,8 +72,11 @@ bool IsPluginThreadAsyncCallSupported(NPP instance) {
   // operation, we force support to false for Safari. If they ever implement
   // support for pluginthreadasynccall, we will have to revisit this
   // work-around and incorporate a version check.
+  // Unfortunately Firefox sometimes returns NULL from NPN_UserAgent(), so we
+  // assume the browser is not Safari if the user agent is NULL.
   const char *user_agent = NPN_UserAgent(instance);
-  bool is_safari = strstr(user_agent, "Safari") != NULL &&
+  bool is_safari = user_agent &&
+                   strstr(user_agent, "Safari") != NULL &&
                    strstr(user_agent, "Chrome") == NULL;
   return !is_safari;
 }

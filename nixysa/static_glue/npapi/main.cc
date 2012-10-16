@@ -72,6 +72,30 @@ extern "C" {
     glue::InitializeGlue(instance);
     NPObject *object = glue::CreateStaticNPObject(instance);
     instance->pdata = object;
+
+#if defined(OS_MACOSX)
+    // On the Mac, starting from Google Chrome 22, we need to negotiate
+    // CoreGraphics and Cocoa even though we don't use it.
+    // See: http://code.google.com/p/chromium/issues/detail?id=134761
+    // Code ported from http://gwt-code-reviews.appspot.com/1844803/
+
+    // Select the right drawing model if necessary
+    NPBool supports_core_graphics = false;
+    if (NPN_GetValue(instance, NPNVsupportsCoreGraphicsBool,
+                     &supports_core_graphics) == NPERR_NO_ERROR &&
+        supports_core_graphics) {
+      NPN_SetValue(instance, NPPVpluginDrawingModel,
+                   reinterpret_cast<void*>(NPDrawingModelCoreGraphics));
+    }
+    // Select the Cocoa event model
+    NPBool supports_cocoa_events = false;
+    if (NPN_GetValue(instance, NPNVsupportsCocoaBool,
+                     &supports_cocoa_events) == NPERR_NO_ERROR &&
+        supports_cocoa_events) {
+      NPN_SetValue(instance, NPPVpluginEventModel,
+                   reinterpret_cast<void*>(NPEventModelCocoa));
+    }
+#endif
     return NPERR_NO_ERROR;
   }
 

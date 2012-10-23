@@ -491,6 +491,106 @@ def NpapiExprToNPVariant(scope, type_defn, variable, expression, output,
                                                 success=success)
   return (text, 'OBJECT_TO_NPVARIANT(%s, *%s);' % (variable, output))
 
+_ppapi_binding_glue_header_template = string.Template("""
+  virtual bool HasMethod(const pp::Var& method, pp::Var* exception);
+  virtual bool HasProperty(const pp::Var& name, pp::Var* exception);
+
+  ${Class}* value() const { return value_; }
+  void set_value(${Class}* value) { value_ = value; }
+  pp::InstancePrivate* plugin_instance() const { return plugin_instance_; }
+
+  static ObjectWrapper* GetObjectWrapper(pp::InstancePrivate* instance,
+                                         ${Class}* object);
+ private:
+  pp::InstancePrivate* plugin_instance_;
+  ${Class}* value_;
+""")
+
+def PpapiBindingGlueHeader(scope, type_defn):
+  """Gets the PPAPI glue header for a given type.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type.
+
+  Returns:
+    a string, the glue header.
+  """
+  class_name = cpp_utils.GetScopedName(scope, type_defn)
+  return (_ppapi_binding_glue_header_template.substitute(Class=class_name), '',
+          'pp::deprecated::ScriptableObject')
+
+_ppapi_binding_glue_cpp_template = string.Template("""
+ObjectWrapper::ObjectWrapper(pp::InstancePrivate* instance)
+    :  plugin_instance_(instance) {
+}
+
+void ObjectWrapper::RegisterWrapper(pp::InstancePrivate* instance) {
+}
+
+bool ObjectWrapper::HasMethod(const pp::Var& method, pp::Var* exception) {
+  if (method.is_string()) return HasMethodInner(method.AsString());
+  *exception = pp::Var("method name is not a string");
+  return false;
+}
+
+bool ObjectWrapper::HasProperty(const pp::Var& name, pp::Var* exception) {
+  if (name.is_string()) return HasPropertyInner(name.AsString());
+  *exception = pp::Var("property name is not a string");
+  return false;
+}
+
+ObjectWrapper* ObjectWrapper::GetObjectWrapper(pp::InstancePrivate* instance,
+                                               ${Class}* object) {
+  ObjectWrapper* wrapper = new ObjectWrapper(instance);
+  wrapper->set_value(object);
+  return wrapper;
+}
+""")
+
+
+def PpapiBindingGlueCpp(scope, type_defn):
+  """Gets the PPAPI glue implementation for a given type.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type.
+
+  Returns:
+    a string, the glue implementation.
+  """
+  class_name = cpp_utils.GetScopedName(scope, type_defn)
+  return _ppapi_binding_glue_cpp_template.substitute(Class=class_name)
+
+def PpapiDispatchFunctionHeader(scope, type_defn, variable, npp, success):
+  """Gets a header for PPAPI glue dispatch functions.
+
+  This function creates a string containing a C++ code snippet that should be
+  included at the beginning of PPAPI glue dispatch functions like Call or
+  GetProperty. This code snippet will declare and initialize certain variables
+  that will be used in the dispatch functions, like the pp::Var representing
+  the object, or a pointer to the pp::Instance.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type.
+    variable: a string, representing a name of a variable that can be used to
+      store a reference to the object.
+    npp: a string, representing the name of the variable that holds the pointer
+      to the pp::Instance. Will be declared by the code snippet.
+    success: the name of a bool variable containing the current success status.
+      (is not declared by the code snippet).
+
+  Returns:
+    a (string, string) pair, the first string being the code snippet, and the
+    second string being an expression to access the object.
+  """
+  (scope, type_defn, success) = (scope, type_defn, success)  # silence gpylint.
+  (variable, npp) = (variable, npp)
+  return ('', 'value()')
+
+def Name():
+  return ("by_pointer")
 
 def main(unused_argv):
   pass

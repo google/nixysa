@@ -543,6 +543,208 @@ def NpapiExprToNPVariant(scope, type_defn, variable, expression, output,
                                                 success=success)
   return (text, 'OBJECT_TO_NPVARIANT(%s_npobject, *%s);' % (variable, output))
 
+def PpapiBindingGlueHeader(scope, type_defn):
+  """Gets the PPAPI glue header for a given type.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type.
+
+  Returns:
+    a string, the glue header.
+
+  Raises:
+    InvalidArrayUsage: always. This function should not be called on an array.
+  """
+  raise InvalidArrayUsage
+
+
+def PpapiBindingGlueCpp(scope, type_defn):
+  """Gets the PPAPI glue implementation for a given type.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type.
+
+  Returns:
+    a string, the glue implementation.
+
+  Raises:
+    InvalidArrayUsage: always. This function should not be called on an array.
+  """
+  raise InvalidArrayUsage
+
+
+def PpapiDispatchFunctionHeader(scope, type_defn, variable, npp, success):
+  """Gets a header for PPAPI glue dispatch functions.
+
+  This function creates a string containing a C++ code snippet that should be
+  included at the beginning of PPAPI glue dispatch functions like Call or
+  GetProperty. This code snippet will declare and initialize certain variables
+  that will be used in the dispatch functions, like the pp::Var representing
+  the object, or a pointer to the pp::Instance.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type.
+    variable: a string, representing a name of a variable that can be used to
+      store a reference to the object.
+    npp: a string, representing the name of the variable that holds the pointer
+      to the pp::Instance. Will be declared by the code snippet.
+    success: the name of a bool variable containing the current success status.
+      (is not declared by the code snippet).
+
+  Returns:
+    a (string, string) pair, the first string being the code snippet, and the
+    second string being an expression to access the object.
+
+  Raises:
+    InvalidArrayUsage: always. This function should not be called on an array.
+  """
+  raise InvalidArrayUsage
+
+_from_ppvar_template = string.Template("""
+${Type} ${variable};
+do {
+  if (!${input}.is_object()) {
+    *exception = pp::Var("Error in " ${context}
+              ": was expecting an array but got a non-object.");
+    ${success} = false;
+    break;
+  }
+  pp::VarPrivate arrayObject(${input});
+  pp::Var count = arrayObject.GetProperty(pp::Var("length"));
+  if (!count.is_number()) {
+    *exception = pp::Var("Error in " ${context}
+              ": input had no valid length property.");
+    ${success} = false;
+    break;
+  }
+  int size = count.AsInt();
+  if (size < 0) {
+    *exception = pp::Var("Error in " ${context}
+             ": input had negative length property.");
+    ${success} = false;
+    break;
+  }
+  ${variable}.resize(size);
+  for (int i = 0; i < size; i++) {
+    pp::Var value = arrayObject.GetProperty(pp::Var(i));
+    ${GetValue}
+    if (!${success}) {
+      *exception = pp::Var("Exception while validating " ${context}
+                  ": a value at an index less than or equal to the "
+                  "index requested was missing or of invalid type.");
+      break;
+    }
+    ${variable}[i] = ${expr};
+  }
+} while (false);
+""")
+
+
+def PpapiFromPPVar(scope, type_defn, input_expr, variable, success,
+    exception_context, npp):
+  """Gets the string to get a value from a pp::Var.
+
+  This function creates a string containing a C++ code snippet that is used to
+  retrieve a value from a pp::Var. If an error occurs, like if the pp::Var
+  is not of the correct type, the snippet will set the success status variable
+  to false.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type of the value.
+    input_expr: an expression representing the pp::Var to get the value from.
+    variable: a string, representing a name of a variable that can be used to
+      store a reference to the value.
+    success: the name of a bool variable containing the current success status.
+    exception_context: the name of a string containing context information, for
+      use in exception reporting.
+    npp: a string, representing the name of the variable that holds the pointer
+      to the pp::Instance.
+
+  Returns:
+    a (string, string) pair, the first string being the code snippet and the
+    second one being the expression to access that value.
+  """
+  data_type = type_defn.GetFinalType().data_type
+  data_type_bm = data_type.binding_model
+  text, expr = data_type_bm.PpapiFromPPVar(scope, data_type, 'value',
+                                           '%s_i' % variable, success,
+                                           exception_context, npp)
+  type_name, unused_need_defn = _CppTypeString(scope, type_defn)
+  text = _from_ppvar_template.substitute(Type=type_name,
+                                         variable=variable,
+                                         input=input_expr,
+                                         GetValue=text,
+                                         expr=expr,
+                                         npp=npp,
+                                         success=success,
+                                         context=exception_context)
+  return (text, variable)
+
+
+_expr_to_ppvar_template = string.Template("""
+${Type} ${variable} = ${expr};
+pp::VarPrivate ${variable}_ppvar = pp::VarPrivate(CreateArray(${npp}));
+if (${variable}_ppvar.is_object()) {
+  for (${Type}::size_type i = 0; i < ${variable}.size(); i++) {
+    pp::Var value;
+    ${SetValuePre}
+    if (!${success}) break;
+    ${SetValuePost}
+    ${variable}_ppvar.Call("push", value);
+  }
+} else {
+  *exception = pp::Var("Unable to allocate JS array");
+  ${success} = false;
+}
+""")
+
+
+def PpapiExprToPPVar(scope, type_defn, variable, expression, output,
+                     success, npp):
+  """Gets the string to store a value into a pp::Var.
+
+  This function creates a string containing a C++ code snippet that is used to
+  store a value into a pp::Var. That operation takes two phases, one that
+  allocates necessary PPAPI resources, and that can fail, and one that actually
+  sets the pp::Var (that can't fail). If an error occurs, the snippet will
+  set the success status variable to false.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type of the value.
+    variable: a string, representing a name of a variable that can be used to
+      store a reference to the value.
+    expression: a string representing the expression that yields the value to
+      be stored.
+    output: an expression representing a pointer to the pp::Var to store the
+      value into.
+    success: the name of a bool variable containing the current success status.
+    npp: a string, representing the name of the variable that holds the pointer
+      to the pp::Instance.
+
+  Returns:
+    a (string, string) pair, the first string being the code snippet for the
+    first phase, and the second one being the code snippet for the second phase.
+  """
+  data_type = type_defn.GetFinalType().data_type
+  data_type_bm = data_type.binding_model
+  pre, post = data_type_bm.PpapiExprToPPVar(scope, data_type,
+                                            '%s_value' % variable,
+                                            '%s[i]' % variable, '&value',
+                                            success, npp)
+  type_name, unused_need_defn = _CppTypeString(scope, type_defn)
+  text = _expr_to_ppvar_template.substitute(Type=type_name,
+                                            variable=variable,
+                                            expr=expression,
+                                            npp=npp,
+                                            SetValuePre=pre,
+                                            SetValuePost=post,
+                                            success=success)
+  return (text, '*%s = %s_ppvar;' % (output, variable))
 
 def main():
   pass

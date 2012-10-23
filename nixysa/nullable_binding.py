@@ -526,6 +526,203 @@ def NpapiExprToNPVariant(scope, type_defn, variable, expression, output,
 
   return nullable_pre_text, nullable_post_text
 
+def PpapiBindingGlueHeader(scope, type_defn):
+  """Gets the PPAPI glue header for a given type.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type.
+
+  Returns:
+    a string, the glue header.
+
+  Raises:
+    InvalidNullableUsage: always. This function should not be called on a
+      nullable.
+  """
+  raise InvalidNullableUsage
+
+
+def PpapiBindingGlueCpp(scope, type_defn):
+  """Gets the PPAPI glue implementation for a given type.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type.
+
+  Returns:
+    a string, the glue implementation.
+
+  Raises:
+    InvalidNullableUsage: always. This function should not be called on a
+      nullable.
+  """
+  raise InvalidNullableUsage
+
+
+def PpapiDispatchFunctionHeader(scope, type_defn, variable, npp, success):
+  """Gets a header for PPAPI glue dispatch functions.
+
+  This function creates a string containing a C++ code snippet that should be
+  included at the beginning of PPAPI glue dispatch functions like Call or
+  GetProperty. This code snippet will declare and initialize certain variables
+  that will be used in the dispatch functions, like the pp::Var representing
+  the object, or a pointer to the pp::Instance.
+
+  First it checks whether the pp::Var is null. If so it simply sets the value
+  to null. It relies on the later compilation of the glue to detect when it is
+  used with a binding model that cannot be used with the value null. It is
+  binding model independent.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type.
+    variable: a string, representing a name of a variable that can be used to
+      store a reference to the object.
+    npp: a string, representing the name of the variable that holds the pointer
+      to the pp::Instance. Will be declared by the code snippet.
+    success: the name of a bool variable containing the current success status.
+      (is not declared by the code snippet).
+
+  Returns:
+    a (string, string) pair, the first string being the code snippet, and the
+    second string being an expression to access the object.
+
+  Raises:
+    InvalidNullableUsage: always. This function should not be called on a
+      nullable.
+  """
+  raise InvalidNullableUsage
+
+_ppapi_from_ppvar_template = string.Template("""
+${Type} ${variable};
+if (${input}.is_null()) {
+  ${variable} = NULL;
+} else {
+  ${text}
+  ${variable} = ${value};
+}
+""")
+
+
+def PpapiFromPPVar(scope, type_defn, input_expr, variable, success,
+    exception_context, npp):
+  """Gets the string to get a value from a pp::Var.
+
+  This function creates a string containing a C++ code snippet that is used to
+  retrieve a value from a pp::Var. If an error occurs, like if the pp::Var
+  is not of the correct type, the snippet will set the success status variable
+  to false.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type of the value.
+    input_expr: an expression representing the pp::Var to get the value from.
+    variable: a string, representing a name of a variable that can be used to
+      store a reference to the value.
+    success: the name of a bool variable containing the current success status.
+    exception_context: the name of a string containing context information, for
+      use in exception reporting.
+    npp: a string, representing the name of the variable that holds the pointer
+      to the pp::Instance.
+
+  Returns:
+    a (string, string) pair, the first string being the code snippet and the
+    second one being the expression to access that value.
+  """
+  data_type = type_defn.GetFinalType().data_type
+  data_type_bm = data_type.binding_model
+  text, value = data_type_bm.PpapiFromPPVar(
+      scope,
+      data_type,
+      input_expr,
+      variable + '_nullable',
+      success,
+      exception_context,
+      npp);
+
+  data_type_name, dummy = data_type_bm.CppMemberString(scope, data_type)
+  nullable_text = _ppapi_from_ppvar_template.substitute(
+      Type=data_type_name,
+      variable=variable,
+      text=text,
+      input=input_expr,
+      value=value)
+
+  return (nullable_text, variable)
+
+
+_ppapi_to_ppvar_pre_template = string.Template("""
+${pre_text}
+if (!${variable}) {
+  ${success} = true;
+  *exception = pp::Var();
+}
+""")
+
+
+_ppapi_to_ppvar_post_template = string.Template("""
+if (${variable}) {
+  ${post_text}
+} else {
+  *${output} = pp::Var::Null();
+}
+""")
+
+
+def PpapiExprToPPVar(scope, type_defn, variable, expression, output,
+                     success, npp):
+  """Gets the string to store a value into a pp::Var.
+
+  This function creates a string containing a C++ code snippet that is used to
+  store a value into a pp::Var. That operation takes two phases, one that
+  allocates necessary PPAPI resources, and that can fail, and one that actually
+  sets the pp::Var (that can't fail). If an error occurs, the snippet will
+  set the success status variable to false.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type of the value.
+    variable: a string, representing a name of a variable that can be used to
+      store a reference to the value.
+    expression: a string representing the expression that yields the value to
+      be stored.
+    output: an expression representing a pointer to the pp::Var to store the
+      value into.
+    success: the name of a bool variable containing the current success status.
+    npp: a string, representing the name of the variable that holds the pointer
+      to the pp::Instance.
+
+  Returns:
+    a (string, string) pair, the first string being the code snippet for the
+    first phase, and the second one being the code snippet for the second phase.
+  """
+  data_type = type_defn.GetFinalType().data_type
+  data_type_bm = data_type.binding_model
+  pre_text, post_text = data_type_bm.PpapiExprToPPVar(
+      scope,
+      data_type,
+      variable,
+      expression,
+      output,
+      success,
+      npp)
+
+  nullable_pre_text = _ppapi_to_ppvar_pre_template.substitute(
+      variable=variable,
+      npp=npp,
+      pre_text=pre_text,
+      success=success)
+
+  nullable_post_text = _ppapi_to_ppvar_post_template.substitute(
+      variable=variable,
+      output=output,
+      npp=npp,
+      post_text=post_text,
+      success=success)
+
+  return nullable_pre_text, nullable_post_text
+
 def main():
   pass
 

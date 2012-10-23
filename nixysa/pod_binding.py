@@ -635,6 +635,231 @@ def NpapiExprToNPVariant(scope, type_defn, variable, expression, output,
   else:
     raise UnknownPODType(final_type.podtype)
 
+def PpapiBindingGlueHeader(scope, type_defn):
+  """Gets the PPAPI glue header for a given type.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type.
+
+  Returns:
+    a string, the glue header.
+
+  Raises:
+    InvalidPODUsage: always. This function can't be called for a POD type.
+  """
+  raise InvalidPODUsage
+
+
+def PpapiBindingGlueCpp(scope, type_defn):
+  """Gets the PPAPI glue implementation for a given type.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type.
+
+  Returns:
+    a string, the glue implementation.
+
+  Raises:
+    InvalidPODUsage: always. This function can't be called for a POD type.
+  """
+  raise InvalidPODUsage
+
+
+def PpapiDispatchFunctionHeader(scope, type_defn, variable, npp, success):
+  """Gets a header for PPAPI glue dispatch functions.
+
+  This function creates a string containing a C++ code snippet that should be
+  included at the beginning of PPAPI glue dispatch functions like Call or
+  GetProperty. This code snippet will declare and initialize certain variables
+  that will be used in the dispatch functions, like the pp::Var representing
+  the object, or a pointer to the pp::Instance.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type.
+    variable: a string, representing a name of a variable that can be used to
+      store a reference to the object.
+    npp: a string, representing the name of the variable that holds the pointer
+      to the pp::Instance. Will be declared by the code snippet.
+    success: the name of a bool variable containing the current success status.
+      (is not declared by the code snippet).
+
+  Returns:
+    a (string, string) pair, the first string being the code snippet, and the
+    second string being an expression to access the object.
+
+  Raises:
+    InvalidPODUsage: always. This function can't be called for a POD type.
+  """
+  raise InvalidPODUsage
+
+
+_string_from_ppvar_template = string.Template("""
+${type} ${variable};
+if (${input}.is_string()) {
+  ${variable} = ${input}.AsString();
+} else {
+  ${success} = false;
+  *exception = pp::Var("Error in " ${context}
+                       ": was expecting a string.");
+}
+""")
+
+_float_from_ppvar_template = string.Template("""
+  ${type} ${variable} = 0.f;
+  if (${input}.is_number()) {
+    ${variable} = static_cast<${type}>(${input}.AsDouble());
+  } else {
+    *exception = pp::Var("Error in " ${context}
+                         ": was expecting a number.");
+    ${success} = false;
+  }
+""")
+
+_int_from_ppvar_template = string.Template("""
+  ${type} ${variable} = 0;
+  if (${input}.is_number()) {
+    ${variable} = static_cast<${type}>(${input}.AsInt());
+  } else {
+    *exception = pp::Var("Error in " ${context}
+                         ": was expecting an int.");
+    ${success} = false;
+  }
+""")
+
+_bool_from_ppvar_template = string.Template("""
+  ${type} ${variable} = false;
+  if (${input}.is_bool()) {
+    ${variable} = ${input}.AsBool();
+  } else {
+    *exception = pp::Var("Error in " ${context}
+                         ": was expecting a boolean.");
+    ${success} = false;
+  }
+""")
+
+def PpapiFromPPVar(scope, type_defn, input_expr, variable, success,
+                   exception_context, npp):
+  """Gets the string to get a value from a pp::Var.
+
+  This function creates a string containing a C++ code snippet that is used to
+  retrieve a value from a pp::Var. If an error occurs, like if the pp::Var
+  is not of the correct type, the snippet will set the success status variable
+  to false.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type of the value.
+    input_expr: an expression representing the pp::Var to get the value from.
+    variable: a string, representing a name of a variable that can be used to
+      store a reference to the value.
+    success: the name of a bool variable containing the current success status.
+    exception_context: the name of a string containing context information, for
+      use in exception reporting.
+    npp: a string, representing the name of the variable that holds the pointer
+      to the pp::Instance.
+
+  Returns:
+    a (string, string) pair, the first string being the code snippet and the
+    second one being the expression to access that value.
+
+  Raises:
+    BadVoidUsage: type_defn is a 'void' POD type.
+    UnknownPODType: type_defn is not a known POD type.
+  """
+  npp = npp  # silence gpylint.
+  type_name = cpp_utils.GetScopedName(scope, type_defn)
+  final_type = type_defn.GetFinalType()
+  if final_type.podtype == 'void':
+    return '', 'void(0)'
+  elif final_type.podtype == 'int':
+    text = _int_from_ppvar_template.substitute(type=type_name,
+                                               input=input_expr,
+                                               variable=variable,
+                                               success=success,
+                                               context=exception_context)
+    return text, variable
+  elif final_type.podtype == 'bool':
+    text = _bool_from_ppvar_template.substitute(type=type_name,
+                                                input=input_expr,
+                                                variable=variable,
+                                                success=success,
+                                                context=exception_context)
+    return text, variable
+  elif final_type.podtype == 'float':
+    text = _float_from_ppvar_template.substitute(type=type_name,
+                                                 input=input_expr,
+                                                 variable=variable,
+                                                 success=success,
+                                                 context=exception_context)
+    return text, variable
+  elif final_type.podtype == 'string':
+    text = _string_from_ppvar_template.substitute(type=type_name,
+                                                  input=input_expr,
+                                                  variable=variable,
+                                                  success=success,
+                                                  context=exception_context)
+    return text, variable
+  else:
+    raise UnknownPODType(final_type.podtype)
+
+
+def PpapiExprToPPVar(scope, type_defn, variable, expression, output,
+                     success, npp):
+  """Gets the string to store a value into a pp::Var.
+
+  This function creates a string containing a C++ code snippet that is used to
+  store a value into a pp::Var. That operation takes two phases, one that
+  allocates necessary PPAPI resources, and that can fail, and one that actually
+  sets the pp::Var (that can't fail). If an error occurs, the snippet will
+  set the success status variable to false.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type of the value.
+    variable: a string, representing a name of a variable that can be used to
+      store a reference to the value.
+    expression: a string representing the expression that yields the value to
+      be stored.
+    output: an expression representing a pointer to the pp::Var to store the
+      value into.
+    success: the name of a bool variable containing the current success status.
+    npp: a string, representing the name of the variable that holds the pointer
+      to the pp::Instance.
+
+  Returns:
+    a (string, string) pair, the first string being the code snippet for the
+    first phase, and the second one being the code snippet for the second phase.
+
+  Raises:
+    UnknownPODType: type_defn is not a known POD type.
+  """
+  (npp, success) = (npp, success)  # silence gpylint.
+  type_name = cpp_utils.GetScopedName(scope, type_defn)
+  final_type = type_defn.GetFinalType()
+  if final_type.podtype == 'void':
+    return ('%s;' % expression,
+            '*%s = pp::Var();' % output)
+  elif final_type.podtype == 'int':
+    return ('%s %s = %s;' % (type_name, variable, expression),
+            '*%s = pp::Var((int32_t)%s);' % (output, variable))
+  elif final_type.podtype == 'bool':
+    return ('%s %s = %s;' % (type_name, variable, expression),
+            '*%s = pp::Var(%s);' % (output, variable))
+  elif final_type.podtype == 'float':
+    return ('%s %s = %s;' % (type_name, variable, expression),
+            '*%s = pp::Var(static_cast<double>(%s));' %
+            (output, variable))
+  elif final_type.podtype == 'variant':
+    raise UnimplementedPODType
+  elif final_type.podtype == 'string':
+    return ('*%s = pp::Var(%s);' % (output, expression),
+            '')
+  else:
+    raise UnknownPODType(final_type.podtype)
+
 
 def main(unused_argv):
   pass

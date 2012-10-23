@@ -44,6 +44,7 @@ import header_generator
 import cpp_header_generator
 import js_header_generator
 import npapi_generator
+import ppapi_generator
 
 # default supported binding models
 import pod_binding
@@ -57,7 +58,8 @@ import nullable_binding
 generators = {'header': header_generator,
               'cppheader': cpp_header_generator,
               'jsheader': js_header_generator,
-              'npapi': npapi_generator}
+              'npapi': npapi_generator,
+              'ppapi': ppapi_generator}
 
 binding_models = {'pod': pod_binding,
                   'callback': callback_binding,

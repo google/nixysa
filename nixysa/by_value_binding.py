@@ -587,6 +587,259 @@ def NpapiExprToNPVariant(scope, type_defn, variable, expression, output,
                              success=success)
   return (text, '')
 
+_ppapi_binding_glue_header_template = string.Template("""
+  virtual bool HasMethod(const pp::Var& method, pp::Var* exception);
+  virtual bool HasProperty(const pp::Var& name, pp::Var* exception);
+
+  const ${Class} &value() { return value_; }
+  ${Class}* value_mutable() { return &value_; }
+  void set_value(const ${Class} &value) { value_ = value; }
+  pp::InstancePrivate* plugin_instance() const { return plugin_instance_; }
+
+  static ObjectWrapper* GetObjectWrapper(pp::InstancePrivate* instance,
+                                         const ${Class} &object);
+ private:
+  pp::InstancePrivate* plugin_instance_;
+  ${Class} value_;
+""")
+
+
+def PpapiBindingGlueHeader(scope, type_defn):
+  """Gets the PPAPI glue header for a given type.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type.
+
+  Returns:
+    a string, the glue header.
+  """
+  class_name = cpp_utils.GetScopedName(scope, type_defn)
+  return (_ppapi_binding_glue_header_template.substitute(Class=class_name),'',
+          'pp::deprecated::ScriptableObject')
+
+_ppapi_binding_glue_cpp_template = string.Template("""
+ObjectWrapper::ObjectWrapper(pp::InstancePrivate* instance)
+    : plugin_instance_(instance) {
+}
+
+void ObjectWrapper::RegisterWrapper(pp::InstancePrivate* instance) {
+}
+
+bool ObjectWrapper::HasMethod(const pp::Var& method, pp::Var* exception) {
+  if (method.is_string()) return HasMethodInner(method.AsString());
+  *exception = pp::Var("method name is not a string");
+  return false;
+}
+
+bool ObjectWrapper::HasProperty(const pp::Var& name, pp::Var* exception) {
+  if (name.is_string()) return HasPropertyInner(name.AsString());
+  *exception = pp::Var("property name is not a string");
+  return false;
+}
+
+ObjectWrapper* ObjectWrapper::GetObjectWrapper(pp::InstancePrivate* instance,
+                                               const ${Class} &object) {
+  ObjectWrapper* wrapper = new ObjectWrapper(instance);
+  wrapper->set_value(object);
+  return wrapper;
+}
+""")
+
+
+def PpapiBindingGlueCpp(scope, type_defn):
+  """Gets the PPAPI glue implementation for a given type.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type.
+
+  Returns:
+    a string, the glue implementation.
+  """
+  class_name = cpp_utils.GetScopedName(scope, type_defn)
+  return _ppapi_binding_glue_cpp_template.substitute(Class=class_name)
+
+
+def PpapiDispatchFunctionHeader(scope, type_defn, variable, npp, success):
+  """Gets a header for PPAPI glue dispatch functions.
+
+  This function creates a string containing a C++ code snippet that should be
+  included at the beginning of PPAPI glue dispatch functions like Call or
+  GetProperty. This code snippet will declare and initialize certain variables
+  that will be used in the dispatch functions, like the pp::Var representing
+  the object, or a pointer to the pp::Instance.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type.
+    variable: a string, representing a name of a variable that can be used to
+      store a reference to the object.
+    npp: a string, representing the name of the variable that holds the pointer
+      to the pp::Instance. Will be declared by the code snippet.
+    success: the name of a bool variable containing the current success status.
+      (is not declared by the code snippet).
+
+  Returns:
+    a (string, string) pair, the first string being the code snippet, and the
+    second string being an expression to access the object.
+  """
+  (scope, type_defn, success) = (scope, type_defn, success)  # silence gpylint.
+  (variable, npp ) = (variable, npp) # silence gpylint.
+  return ('', 'value_mutable()')
+
+# See above for an explanation of the marshaled property
+
+_ppapi_from_ppvar_template_marshaled = string.Template("""
+${Class} ${variable};
+{
+  ${ClassGlueNS}::ObjectWrapper wrapper(${npp});
+  wrapper.SetProperty("marshaled", ${input}, exception);
+  if (!exception->is_undefined())
+    ${success} = false;
+  ${variable} = wrapper.value();
+}
+""")
+
+
+# This template handles both unmarshaled and marshaled representations. It is
+# used for marshaled value types that do not have a getter on their marshaled
+# property.
+_ppapi_from_ppvar_template = string.Template("""
+${Class} ${variable};
+if (${input}.is_object()) {
+  pp::deprecated::ScriptableObject *ppobject =
+    static_cast<pp::VarPrivate>(${input}).AsScriptableObject();
+    // TODO(jhorwich): Implement a mechanism for object type safety.
+    // In NPAPI this was done by examining the NPObject's NPClass
+    ${variable} =
+        static_cast<${ClassGlueNS}::ObjectWrapper *>(ppobject)->value();
+    ${success} = true;
+} else {
+  *exception = pp::Var("Error in " ${context} ": was expecting an object.");
+  ${success} = false;
+}
+if (!${success}) {
+  // TODO: This code path is not tested at the time of writing.
+  ${ClassGlueNS}::ObjectWrapper wrapper(${npp});
+  wrapper.SetProperty("marshaled", ${input}, exception);
+  if (!exception->is_undefined())
+    ${success} = false;
+  ${variable} = wrapper.value();
+}
+""")
+
+
+def PpapiFromPPVar(scope, type_defn, input_expr, variable, success,
+    exception_context, npp):
+  """Gets the string to get a value from a pp::Var.
+
+  This function creates a string containing a C++ code snippet that is used to
+  retrieve a value from a pp::Var. If an error occurs, like if the pp::Var
+  is not of the correct type, the snippet will set the success status variable
+  to false.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type of the value.
+    input_expr: an expression representing the pp::Var to get the value from.
+    variable: a string, representing a name of a variable that can be used to
+      store a reference to the value.
+    success: the name of a bool variable containing the current success status.
+    exception_context: the name of a string containing context information, for
+      use in exception reporting.
+    npp: a string, representing the name of the variable that holds the pointer
+      to the pp::Instance.
+
+  Returns:
+    a (string, string) pair, the first string being the code snippet and the
+    second one being the expression to access that value.
+  """
+  npp = npp  # silence gpylint.
+  class_name = cpp_utils.GetScopedName(scope, type_defn)
+  glue_namespace = npapi_utils.GetGlueFullNamespace(type_defn)
+  marshaling_attributes = GetMarshalingAttributes(type_defn)
+
+  # If the value type has marshaling getter then the C++ type is never exposed
+  # to JavaScript and we don't need to check. Otherwise, assume that we might
+  # see a wrapped C++ type or an alternative JavaScript representation.
+  if 'getter' in marshaling_attributes:
+    template = _ppapi_from_ppvar_template_marshaled
+  else:
+    template = _ppapi_from_ppvar_template
+
+  text = template.substitute(npp=npp,
+                             Class=class_name,
+                             ClassGlueNS=glue_namespace,
+                             variable=variable,
+                             input=input_expr,
+                             success=success,
+                             context=exception_context)
+  return (text, variable)
+
+
+_ppapi_expr_to_ppvar_template = string.Template("""
+${ClassGlueNS}::ObjectWrapper* ${variable} =
+    ${ClassGlueNS}::ObjectWrapper::GetObjectWrapper(${npp}, ${expr});
+*${output} = pp::VarPrivate(${npp},${variable});
+${success} = true;
+""")
+
+_ppapi_expr_to_ppvar_template_marshaled = string.Template("""
+{
+  ${ClassGlueNS}::ObjectWrapper wrapper(${npp});
+  wrapper.set_value(${expr});
+  *${output} = wrapper.GetProperty("marshaled", exception);
+  if (!exception->is_undefined())
+    ${success} = false;
+}
+""")
+
+def PpapiExprToPPVar(scope, type_defn, variable, expression, output,
+                     success, npp):
+  """Gets the string to store a value into a pp::Var.
+
+  This function creates a string containing a C++ code snippet that is used to
+  store a value into a pp::Var. That operation takes two phases, one that
+  allocates necessary PPAPI resources, and that can fail, and one that actually
+  sets the pp::Var (that can't fail). If an error occurs, the snippet will
+  set the success status variable to false.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type of the value.
+    variable: a string, representing a name of a variable that can be used to
+      store a reference to the value.
+    expression: a string representing the expression that yields the value to
+      be stored.
+    output: an expression representing a pointer to the pp::Var to store the
+      value into.
+    success: the name of a bool variable containing the current success status.
+    npp: a string, representing the name of the variable that holds the pointer
+      to the pp::Instance.
+
+  Returns:
+    a (string, string) pair, the first string being the code snippet for the
+    first phase, and the second one being the code snippet for the second phase.
+  """
+  class_name = cpp_utils.GetScopedName(scope, type_defn)
+  glue_namespace = npapi_utils.GetGlueFullNamespace(type_defn)
+  marshaling_attributes = GetMarshalingAttributes(type_defn)
+  if 'getter' in marshaling_attributes:
+    template = _ppapi_expr_to_ppvar_template_marshaled
+  else:
+    template = _ppapi_expr_to_ppvar_template
+  text = template.substitute(Class=class_name,
+                             ClassGlueNS=glue_namespace,
+                             variable=variable,
+                             output=output,
+                             npp=npp,
+                             expr=expression,
+                             success=success)
+  return (text, '')
+
+def Name():
+  return ("by_value")
 
 def main():
   pass

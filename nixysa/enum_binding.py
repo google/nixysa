@@ -471,6 +471,163 @@ def NpapiExprToNPVariant(scope, type_defn, variable, expression, output,
   return ('%s %s = %s;' % (type_name, variable, expression),
           'INT32_TO_NPVARIANT(%s, *%s);' % (variable, output))
 
+def PpapiBindingGlueHeader(scope, type_defn):
+  """Gets the PPAPI glue header for a given type.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type.
+
+  Returns:
+    a string, the glue header.
+
+  Raises:
+    InvalidEnumUsage: always. This function can't be called for an enum type.
+  """
+  raise InvalidEnumUsage
+
+
+def PpapiBindingGlueCpp(scope, type_defn):
+  """Gets the PPAPI glue implementation for a given type.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type.
+
+  Returns:
+    a string, the glue implementation.
+
+  Raises:
+    InvalidEnumUsage: always. This function can't be called for an enum type.
+  """
+  raise InvalidEnumUsage
+
+def PpapiDispatchFunctionHeader(scope, type_defn, variable, npp, success):
+  """Gets a header for PPAPI glue dispatch functions.
+
+  This function creates a string containing a C++ code snippet that should be
+  included at the beginning of PPAPI glue dispatch functions like Call or
+  GetProperty. This code snippet will declare and initialize certain variables
+  that will be used in the dispatch functions, like the pp::Var representing
+  the object, or a pointer to the pp::Instance.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type.
+    variable: a string, representing a name of a variable that can be used to
+      store a reference to the object.
+    npp: a string, representing the name of the variable that holds the pointer
+      to the pp::Instance. Will be declared by the code snippet.
+    success: the name of a bool variable containing the current success status.
+      (is not declared by the code snippet).
+
+  Returns:
+    a (string, string) pair, the first string being the code snippet, and the
+    second string being an expression to access the object.
+
+  Raises:
+    InvalidEnumUsage: always. This function can't be called for an enum type.
+  """
+  raise InvalidEnumUsage
+
+
+_ppapi_enum_from_ppvar_template = string.Template("""
+${type} ${variable} = ${first};
+if (${input}.is_number() ) {
+  ${variable} = static_cast<${type}>(${input}.AsInt());
+  if (${variable} < ${first} || ${variable} > ${last}) {
+    *exception = pp::Var("Error in " ${context}
+                         ": value out of range.");
+    ${result} = false;
+  }
+} else {
+  *exception = pp::Var("Error in " ${context}
+               ": was expecting a number.");
+  ${result} = false;
+}""")
+
+
+def PpapiFromPPVar(scope, type_defn, input_expr, variable, success,
+    exception_context, npp):
+  """Gets the string to get a value from a pp::Var.
+
+  This function creates a string containing a C++ code snippet that is used to
+  retrieve a value from a pp::Var. If an error occurs, like if the pp::Var
+  is not of the correct type, the snippet will set the success status variable
+  to false.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type of the value.
+    input_expr: an expression representing the pp::Var to get the value from.
+    variable: a string, representing a name of a variable that can be used to
+      store a reference to the value.
+    success: the name of a bool variable containing the current success status.
+    exception_context: the name of a string containing context information, for
+      use in exception reporting.
+    npp: a string, representing the name of the variable that holds the pointer
+      to the pp::Instance.
+
+  Returns:
+    a (string, string) pair, the first string being the code snippet and the
+    second one being the expression to access that value.
+
+  Raises:
+    InvalidEnumUsage: if the type is not an enum, or the enum doesn't have any
+      values.
+  """
+  npp = npp  # silence gpylint.
+  final_type = type_defn.GetFinalType()
+  if final_type.defn_type != 'Enum':
+    raise InvalidEnumUsage
+  if not final_type.values:
+    raise InvalidEnumUsage
+  type_name = cpp_utils.GetScopedName(scope, type_defn)
+  first_value = (cpp_utils.GetScopePrefix(scope, final_type) +
+                 final_type.values[0].name)
+  last_value = (cpp_utils.GetScopePrefix(scope, final_type) +
+                final_type.values[-1].name)
+  text = _ppapi_enum_from_ppvar_template.substitute(type=type_name,
+                                                    variable=variable,
+                                                    first=first_value,
+                                                    last=last_value,
+                                                    input=input_expr,
+                                                    result=success,
+                                                    context=exception_context)
+  return text, variable
+
+
+def PpapiExprToPPVar(scope, type_defn, variable, expression, output,
+                     success, npp):
+  """Gets the string to store a value into a pp::Var.
+
+  This function creates a string containing a C++ code snippet that is used to
+  store a value into a pp::Var. That operation takes two phases, one that
+  allocates necessary PPAPI resources, and that can fail, and one that actually
+  sets the pp::Var (that can't fail). If an error occurs, the snippet will
+  set the success status variable to false.
+
+  Args:
+    scope: a Definition for the scope in which the glue will be written.
+    type_defn: a Definition, representing the type of the value.
+    variable: a string, representing a name of a variable that can be used to
+      store a reference to the value.
+    expression: a string representing the expression that yields the value to
+      be stored.
+    output: an expression representing a pointer to the pp::Var to store the
+      value into.
+    success: the name of a bool variable containing the current success status.
+    npp: a string, representing the name of the variable that holds the pointer
+      to the pp::Instance.
+
+  Returns:
+    a (string, string) pair, the first string being the code snippet for the
+    first phase, and the second one being the code snippet for the second phase.
+  """
+  (success, npp) = (success, npp)  # silence gpylint.
+  type_name = cpp_utils.GetScopedName(scope, type_defn)
+  return ('%s %s = %s;' % (type_name, variable, expression),
+          '*%s = pp::Var(%s);' % (output, variable))
 
 def main():
   pass
